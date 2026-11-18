@@ -1,0 +1,61 @@
+# Warms resource build keys in voyemu-deps/main so runs on any resource tag can restore them.
+# Keep the scheduled source SHA aligned with the product commit used by current resource tags.
+name: caches
+
+on:
+    schedule:
+        - cron: "0 3 * * 1,4"
+    workflow_dispatch:
+        inputs:
+            source_sha:
+                description: Full public voyemu/voyemu commit SHA of the resource tag to warm
+                type: string
+
+permissions:
+    contents: read
+
+jobs:
+    source:
+        name: Select the source commit
+        if: github.repository == 'voyemu/voyemu-deps' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        runs-on: ubuntu-24.04
+        timeout-minutes: 5
+        outputs:
+            sha: ${{ steps.pin.outputs.sha }}
+        steps:
+            - id: pin
+              env:
+                  SOURCE_SHA: ${{ inputs.source_sha || '2340dc324b4095ab159faf654c9d547966e5a02e' }}
+              run: |
+                  if [[ ! "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+                      echo "source_sha must be a full lowercase commit SHA" >&2
+                      exit 1
+                  fi
+                  echo "sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
+
+    refresh:
+        name: Refresh ${{ matrix.set }} (fixtures ${{ matrix.fixtures || 'false' }})
+        needs: source
+        runs-on: ${{ matrix.runner }}
+        timeout-minutes: 45
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    - { set: linux, runner: ubuntu-24.04 }
+                    - { set: linux, runner: ubuntu-24.04, fixtures: 'true' }
+                    - { set: macos, runner: macos-15, fixtures: 'true' }
+                    - { set: windows, runner: windows-2022 }
+                    - { set: uncrustify, runner: ubuntu-24.04 }
+                    - { set: kernel-qinggan-09, runner: ubuntu-24.04 }
+                    - { set: kernel-qinggan-11, runner: ubuntu-24.04 }
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  repository: voyemu/voyemu
+                  ref: ${{ needs.source.outputs.sha }}
+                  persist-credentials: false
+            - uses: ./.github/actions/toolchains
+              with:
+                  set: ${{ matrix.set }}
+                  fixture-inputs: ${{ matrix.fixtures || 'false' }}
