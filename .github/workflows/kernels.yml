@@ -1,0 +1,12 @@
+# Registers the dispatcher. The selected tag carries the full build workflow.
+name: kernels
+on:
+  workflow_dispatch:
+permissions: {}
+jobs:
+  registration:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: |
+          echo 'Dispatch this workflow on the resource tag, not the default branch.'
+          exit 1
