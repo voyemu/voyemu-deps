@@ -21,6 +21,7 @@ struct Symbol {
 struct Elf {
     std::string_view bytes;
     std::map<std::string, Symbol, std::less<>> symbols;
+    std::map<std::uint64_t, std::uint64_t> relative; // R_AARCH64_RELATIVE: place -> addend
     std::vector<std::array<std::uint64_t, 3>> loads; // vaddr, offset, file size
     std::uint64_t text = 0, text_size = 0, text_offset = 0;
 
@@ -53,6 +54,16 @@ struct Elf {
                 this->text = section(i, 16, 8);
                 text_offset = section(i, 24, 8);
                 text_size = section(i, 32, 8);
+            }
+
+            if (section(i, 4, 4) == 4) {
+                const auto offset = section(i, 24, 8), size = section(i, 32, 8);
+
+                for (std::uint64_t at = offset; at + 24 <= offset + size; at += 24) {
+                    if ((field(image, at + 8, 8) & 0xffffffff) == 1027) {
+                        relative[field(image, at, 8)] = field(image, at + 16, 8);
+                    }
+                }
             }
 
             if (section(i, 4, 4) != 2) {
@@ -98,6 +109,49 @@ struct Elf {
 
 std::int64_t sign(std::uint64_t value, unsigned bits) {
     return static_cast<std::int64_t>(value << (64 - bits)) >> (64 - bits);
+}
+
+// Wire leaves of an event: the generated decoder descriptors xl4_decode walks (48-byte records:
+// kind, type name, structure offset and size, ..., member list; kind 0 a basic value, 3 a
+// structure). libx4serial reads each basic value big-endian at the running cursor and advances it
+// by the value size, so the payload is the leaves back to back. Arrays and strings (other kinds)
+// are refused.
+struct Leaf {
+    unsigned bytes;
+};
+bool descriptor_leaves(const Elf &elf, std::uint64_t at, std::vector<Leaf> &out, unsigned depth,
+                       std::string *first_type) {
+    need(depth < 16, "QNX_PASSION_SOMEIP_DESCRIPTOR");
+
+    for (unsigned i = 0; i < 512; ++i, at += 48) {
+        const auto kind = elf.read(at, 8), shape = elf.read(at + 16, 8);
+        const bool named = elf.relative.contains(at + 8), nested = elf.relative.contains(at + 32);
+
+        if (!kind && !shape && !named && !nested && !elf.read(at + 24, 8)) {
+            return true;
+        }
+
+        if (first_type && i == 0 && named && kind == 3) {
+            *first_type = Elf::cstring(elf.bytes, elf.offset(elf.relative.at(at + 8), 1));
+        }
+
+        const auto bytes = static_cast<unsigned>(shape >> 32);
+
+        if (kind == 0 && bytes >= 1 && bytes <= 8) {
+            out.push_back({bytes});
+        } else if (kind == 3 && nested) {
+            if (!descriptor_leaves(elf, elf.relative.at(at + 32), out, depth + 1,
+                                   i == 0 ? first_type : nullptr)) {
+                return false;
+            }
+        } else {
+            return false;
+        }
+    }
+
+    need(false, "QNX_PASSION_SOMEIP_DESCRIPTOR");
+
+    return false;
 }
 
 // The string the x0 argument of each `bl target` carries, from adrp x0 + add x0, x0, #imm right
@@ -212,32 +266,55 @@ Json qnx_passion_someip_contract(std::string_view ic_service, const Json &servic
                    major = elf.read(symbol.value + 0x2c, 2);
         need(event_id >= 0x8000 && major >= 1 && major <= 0xff, "QNX_PASSION_SOMEIP_EVENT");
 
+        const auto descriptor = elf.symbols.find("field_notifier_" + event_name + "_event_fields");
+        std::vector<Leaf> leaves;
+        std::string type;
+
+        if (descriptor == elf.symbols.end() ||
+            !descriptor_leaves(elf, descriptor->second.value, leaves, 0, &type) || leaves.empty()) {
+            continue;
+        }
+
         for (auto &[service_name, service] : services) {
-            if (service.at("service") != service_id || !table.contains(service_name) ||
-                !table.at(service_name).contains(event_name)) {
+            if (service.at("service") != service_id) {
                 continue;
             }
 
             service["instance"] = instance;
             service["major"] = major;
-            Json fields = Json::array();
-            std::size_t offset = 0;
-            const std::string signal_prefix = "8155QNX.";
+            // Catalogue names follow the service table while its signal widths agree with the
+            // decoder; a later field keeps its position only.
+            const Json *signals = nullptr;
 
-            for (const auto &signal : *table.at(service_name).at(event_name)) {
-                const auto signal_name = signal.at("name").get<std::string>();
-                const auto bytes = signal.at("len").get<unsigned>();
-                need(signal_name.starts_with(signal_prefix) && bytes >= 1 && bytes <= 8,
-                     "QNX_PASSION_SOMEIP_SIGNAL");
-                fields.push_back({{"name", signal_name.substr(signal_prefix.size())},
-                                  {"offset", offset},
-                                  {"bytes", bytes}});
-                offset += bytes;
+            if (table.contains(service_name) && table.at(service_name).contains(event_name)) {
+                signals = table.at(service_name).at(event_name);
             }
 
-            const bool e2e =
-                    !fields.empty() &&
-                    fields.front().at("name").get<std::string>().ends_with(".E2E_Header.E2E_CRC");
+            Json fields = Json::array();
+            std::size_t offset = 0;
+            bool agree = signals != nullptr;
+            const std::string signal_prefix = "8155QNX.";
+
+            for (std::size_t i = 0; i < leaves.size(); ++i) {
+                agree = agree && i < signals->size() &&
+                        signals->at(i).at("len").get<unsigned>() == leaves[i].bytes;
+                std::string field_name = service_name + "." + event_name + ".#" + std::to_string(i);
+
+                if (agree) {
+                    const auto signal_name = signals->at(i).at("name").get<std::string>();
+                    need(signal_name.starts_with(signal_prefix), "QNX_PASSION_SOMEIP_SIGNAL");
+                    field_name = signal_name.substr(signal_prefix.size());
+                }
+
+                fields.push_back(
+                        {{"name", field_name}, {"offset", offset}, {"bytes", leaves[i].bytes}});
+                offset += leaves[i].bytes;
+            }
+
+            const bool e2e = type == "Basic_strt_E2E_Profile7_MessageType";
+            need(!e2e || (leaves.size() >= 4 && leaves[0].bytes == 8 && leaves[1].bytes == 4 &&
+                          leaves[2].bytes == 4 && leaves[3].bytes == 4),
+                 "QNX_PASSION_SOMEIP_E2E");
             service["events"].push_back({{"name", event_name},
                                          {"event", event_id},
                                          {"eventgroups", eventgroups},
@@ -250,9 +327,7 @@ Json qnx_passion_someip_contract(std::string_view ic_service, const Json &servic
     Json list = Json::array();
 
     for (auto &[name, service] : services) {
-        if (!service.at("events").empty()) {
-            list.push_back(std::move(service));
-        }
+        list.push_back(std::move(service));
     }
 
     need(!list.empty(), "QNX_PASSION_SOMEIP_CONTRACT");
