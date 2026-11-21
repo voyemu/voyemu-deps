@@ -49,15 +49,25 @@ Json notready() {
             {"status", "not-ready"}};
 }
 
+// The SOC signal of the Passion catalogue in 0.1 %.
+static Json charge(int percent) {
+    return concept_patch(VehicleCatalog::passion, VehicleConcept::charge, percent);
+}
+
+static const std::string soc = concept_field(VehicleCatalog::passion, VehicleConcept::charge);
+
 int main() try {
 #ifndef NDEBUG
-    auto state = apply_patch(initial_state(VehicleCatalog::qinggan09), Json{{"soc", 23}});
+    auto state = apply_patch(initial_state(VehicleCatalog::passion), charge(23));
     auto p = passion_mcu_projection(state, boot);
+    assert(state.at("raw_oem").at(soc) == 230);
+    // A charge between whole percent rounds to the nearest percent.
+    assert(passion_mcu_projection(apply_patch(state, Json{{soc, 236}}), boot).at("soc") == 24);
     assert(p.at("soc") == 23 && p.size() == 5 &&
            p.at("source_sha256") == sha256_bytes(state.dump()));
     assert(!p.contains("target"));
     auto missing = state;
-    missing["raw_oem"].erase("fuel_percent");
+    missing["raw_oem"].erase(soc);
     rejects([&] {
         passion_mcu_projection(missing, boot);
     });
@@ -82,7 +92,7 @@ int main() try {
         assert(!passion_mcu_receipt_matches(bad, state, boot));
     }
 
-    auto changed = apply_patch(state, Json{{"soc", 61}});
+    auto changed = apply_patch(state, charge(61));
     assert(!passion_mcu_receipt_matches(r, changed, boot));
     assert(passion_mcu_receipt_matches(receipt(changed), changed, boot));
     int calls = 0;
@@ -126,7 +136,7 @@ int main() try {
     assert(calls == 3 && result.at("sequence") == state.at("sequence"));
     auto retained = state;
     retained["sequence"] = 9;
-    retained["raw_oem"]["soc"] = 99;
+    retained["raw_oem"][soc] = 990;
     calls = 0;
     result = passion_mcu_deliver(
             boot,
@@ -140,7 +150,7 @@ int main() try {
             [&](const auto &) {
                 return ++calls == 1 ? receipt(retained) : receipt(state);
             });
-    assert(state.at("sequence") == 10 && state.at("raw_oem").at("soc") == 23 &&
+    assert(state.at("sequence") == 10 && state.at("raw_oem").at(soc) == 230 &&
            result.at("soc") == 23);
     auto old = state;
     calls = 0;
@@ -157,7 +167,7 @@ int main() try {
                     return notready();
                 }
 
-                state = apply_patch(state, Json{{"soc", 61}});
+                state = apply_patch(state, charge(61));
 
                 return receipt(old);
             });

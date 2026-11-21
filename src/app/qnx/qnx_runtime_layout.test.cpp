@@ -82,22 +82,11 @@ int main() try {
     qnx_runtime_launch_metadata(passion_launch, passion_portable);
     assert(passion_launch.at("profile") == std::string(passion_profile) &&
            passion_launch.at("hardware_adapter") == passion.adapter);
+    // The Passion cluster receives no vehicle fields, so its layout takes no MCU projection.
     auto topics = passion_metadata;
-    topics["mcu_projection"] = qnx_passion_mcu_projection();
-    const auto topic_layout = qnx_portable_layout(passion_profile, topics);
-    assert(topic_layout.projection == topics.at("mcu_projection"));
-    Json topic_launch;
-    qnx_runtime_launch_metadata(topic_launch, topic_layout);
-    assert(topic_launch.at("mcu_projection") == topic_layout.projection);
-    assert(topic_launch.at("profile") == passion_profile);
-    auto wrong_topics = topics;
-    wrong_topics["mcu_projection"]["projected_fields"] = 3.0;
+    topics["mcu_projection"] = qnx_mcu_projection(QnxGuestAdapter::sa8155_qinggan11_731);
     rejects([&] {
-        qnx_portable_layout(passion_profile, wrong_topics);
-    });
-    rejects([&] {
-        qnx_runtime_layout("free-09-chinese-20260106-6.0.3",
-                           Json{{"mcu_projection", topics.at("mcu_projection")}});
+        qnx_portable_layout(passion_profile, topics);
     });
 
     auto passion_network = passion_metadata;

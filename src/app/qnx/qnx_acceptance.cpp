@@ -330,9 +330,8 @@ Json run(const std::filesystem::path &root, const std::string &profile,
     std::unique_ptr<Session> session;
     try {
         const auto definition = read_private_json(profile_file, 1 << 20);
-        session = std::make_unique<Session>(
-                directory, nonce, std::filesystem::path{},
-                vehicle_catalog(definition.at("platform").get<std::string>()));
+        const auto catalog = vehicle_catalog(definition.at("platform").get<std::string>());
+        session = std::make_unique<Session>(directory, nonce, std::filesystem::path{}, catalog);
         const auto profile_values = definition.value("initial_state", Json::object());
 
         if (!profile_values.empty()) {
@@ -443,13 +442,15 @@ Json run(const std::filesystem::path &root, const std::string &profile,
                                     output / "cluster-initial.png",
                                     voyemu::output::png_frame(pixels, 1920, 720, true));
                             initial_png_sha = sha256_file(output / "cluster-initial.png");
-                            Json probe = {{"speed", 37}, {"soc", 65}};
+                            const bool free = !layout.projection.is_null() && !passion;
+                            Json probe = concept_patch(catalog, VehicleConcept::speed,
+                                                       free ? 42 : 37);
+                            probe.update(
+                                    concept_patch(catalog, VehicleConcept::charge, free ? 55 : 65));
 
-                            if (!layout.projection.is_null() && !passion) {
-                                probe = {{"speed", 42},
-                                         {"speed10x", 420},
-                                         {"door_fl", 1},
-                                         {"soc", 55}};
+                            if (free) {
+                                probe.update(
+                                        concept_patch(catalog, VehicleConcept::door_front_left, 1));
                             }
 
                             const auto patched =

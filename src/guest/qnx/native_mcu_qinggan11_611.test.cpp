@@ -899,7 +899,7 @@ int main(int argc, char **argv) {
 
         const auto projection =
                 voyemu::qnx_mcu_projection(voyemu::QnxGuestAdapter::sa8155_qinggan11_611);
-        assert(voyemu::qnx_mcu_request_projection(650, 736, qinggan11_projected_fields, false,
+        assert(voyemu::qnx_mcu_request_projection(650, 736, qinggan11_projected_fields,
                                                   "sa8155-qinggan11-611") == projection);
         assert(voyemu::qnx_mcu_delivery_scope(Json{{"mcu_projection", projection}}, projection));
         assert(!voyemu::qnx_mcu_delivery_scope(

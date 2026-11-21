@@ -65,12 +65,8 @@ int main() try {
           "an earlier scope without its own layout names no field");
     check(cluster({{"hardware_adapter", "sa8155-qinggan11-731"}}).empty(),
           "a qinggan11 launch without its projection names no field");
-    check(cluster({{"hardware_adapter", "sa8155-passion-21480-developer"},
-                   {"mcu_projection", qnx_passion_mcu_projection()}}) ==
-                  std::set<std::string>{"speed", "spd_valid", "soc"},
-          "Passion delivers its three OEM IPC topics");
-    check(cluster({{"hardware_adapter", "sa8155-passion-21480-developer"}}).empty(),
-          "Passion without topics delivers no field");
+    check(cluster({{"hardware_adapter", "sa8155-passion-21480"}}).empty(),
+          "the Passion cluster receives no field");
 
     const auto canbus = multimedia({{"api", 30}});
     check(canbus == canbus_multimedia_fields() && canbus.contains("speed") &&
@@ -102,8 +98,11 @@ int main() try {
     auto passion_mcu = passion;
     passion_mcu["presentation_adapter"] = passion_presentation_contract("test-passion", true);
     passion_mcu["mcu_property_adapter"] = passion_mcu_capability();
-    check(multimedia(passion_mcu) == std::set<std::string>{"soc"},
-          "Passion with its MCU property receives SOC");
+    check(multimedia(passion_mcu) == std::set<std::string>{concept_field(VehicleCatalog::passion,
+                                                                         VehicleConcept::charge)} &&
+                  catalog_field(VehicleCatalog::passion,
+                                "PowerSysInfo.Notify_f_EnergyInform.EnergyInform.SOC"),
+          "Passion with its MCU property receives the SOC signal");
 #endif
 
     FieldDelivery delivery{{"speed", "soc"}, {"soc"}};

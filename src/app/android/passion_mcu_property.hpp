@@ -38,14 +38,18 @@ inline bool passion_mcu_available(const Json &android) {
     return true;
 }
 
+// The provider takes the charge concept as soc in whole percent: the SOC signal of the Passion
+// catalogue in 0.1 % rounds to the nearest percent.
 inline Json passion_mcu_projection(const Json &state, const std::string &boot) {
     validate_state(state);
     passion_mcu_need(android_boot_id_valid(boot), "actual boot required");
+    const auto charge = concept_value(state, VehicleConcept::charge);
+    passion_mcu_need(charge.has_value(), "charge concept required");
 
     return {{"schema", 1},
             {"boot", boot},
             {"sequence", state.at("sequence")},
-            {"soc", state.at("raw_oem").at("soc")},
+            {"soc", *charge},
             {"source_sha256", sha256_bytes(state.dump())}};
 }
 

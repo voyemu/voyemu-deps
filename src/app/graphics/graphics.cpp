@@ -1527,11 +1527,10 @@ struct Backend::Impl {
             return out;
         }
 
-        const auto scope = qnx_mcu_request_projection(
-                a[1], a[2], a[3], options.passion_vehicle_topics, options.mcu_adapter);
+        const auto scope = qnx_mcu_request_projection(a[1], a[2], a[3], options.mcu_adapter);
         const Json *layout = nullptr;
 
-        if (!options.passion_vehicle_topics && a[1] == 650 && a[2] == 736) {
+        if (a[1] == 650 && a[2] == 736) {
             for (const auto &spec : qnx_adapter_registry) {
                 if ((options.mcu_adapter.empty() || spec.name == options.mcu_adapter) &&
                     qnx_mcu_runtime_scope(spec, a[3])) {

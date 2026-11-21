@@ -941,6 +941,11 @@ std::optional<Json> oem_language_command(std::optional<unsigned> previous, unsig
 }
 
 void Session::queue_cluster_language() {
+    // Only the Qinggan catalogues carry the cluster language.
+    if (!model_.state().at("raw_oem").contains("ivi_languageSet")) {
+        return;
+    }
+
     const auto current = model_.state().at("raw_oem").at("ivi_languageSet").get<unsigned>();
 
     // The OEM cluster applies the language through mcd message 24 (setting id 3) besides the MCU

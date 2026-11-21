@@ -46,11 +46,6 @@ std::set<std::string> cluster_fields(const Json &cluster) {
     }
 
     const auto projection = cluster.value("mcu_projection", Json());
-
-    if (projection == qnx_passion_mcu_projection()) {
-        return projection.at("published_fields").get<std::set<std::string>>();
-    }
-
     const auto adapter = cluster.value("hardware_adapter", std::string("sa8155-qinggan09"));
     const auto spec = std::find_if(qnx_adapter_registry.begin(), qnx_adapter_registry.end(),
                                    [&](const QnxAdapterSpec &item) {
@@ -85,11 +80,12 @@ std::set<std::string> multimedia_fields(const Json &android) {
         return {};
     }
 
+    // The Passion VHAL provider receives the charge concept of the Passion catalogue.
     if (passion_presentation(android)) {
-        return passion_mcu_available(android) ? passion_mcu_capability()
-                                                        .at("supported_fields")
-                                                        .get<std::set<std::string>>()
-                                              : std::set<std::string>{};
+        return passion_mcu_available(android)
+                       ? std::set<std::string>{concept_field(VehicleCatalog::passion,
+                                                             VehicleConcept::charge)}
+                       : std::set<std::string>{};
     }
 
     return canbus_multimedia_fields();

@@ -110,14 +110,9 @@ inline QnxRuntimeLayout qnx_runtime_layout(std::string_view profile, const Json 
         throw VoyemuError("QNX_LAYOUT", "Free MCU projection required");
     }
 
+    // Only the qinggan11 adapters project vehicle fields; the Passion cluster receives none.
     if (!free && metadata.contains("mcu_projection") && !metadata.at("mcu_projection").is_null()) {
-        const auto expected = qnx_passion_mcu_projection();
-
-        if (adapter != "sa8155-passion-21480" || !qnx_mcu_delivery_scope(metadata, expected)) {
-            throw VoyemuError("QNX_LAYOUT", "unexpected MCU projection");
-        }
-
-        layout.projection = expected;
+        throw VoyemuError("QNX_LAYOUT", "unexpected MCU projection");
     }
 
     if (metadata.contains("persistence")) {

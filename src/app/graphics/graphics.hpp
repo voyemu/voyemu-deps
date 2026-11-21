@@ -32,7 +32,6 @@ struct Options {
     std::uint64_t generation = 0, worker_nonce = 0;
     std::uint64_t guest_pid = 0, producer_incarnation = 0;
     std::string session_id;
-    bool passion_vehicle_topics = false;
     // hardware_adapter of a qinggan11 cluster, which names the MCU layout of its requests.
     std::string mcu_adapter;
 };

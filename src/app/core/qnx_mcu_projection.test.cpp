@@ -12,8 +12,8 @@ int main() try {
     const auto &qinggan11_611 = qnx_adapter(QnxGuestAdapter::sa8155_qinggan11_611);
     const auto projected = qinggan11_731.mcu_projected_fields;
     // The adapter of the worker selects the layout among adapters of one projected count.
-    assert(qnx_mcu_request_projection(650, 736, projected, false, qinggan11_731.name) == expected);
-    assert(qnx_mcu_request_projection(650, 736, qinggan11_611.mcu_projected_fields, false,
+    assert(qnx_mcu_request_projection(650, 736, projected, qinggan11_731.name) == expected);
+    assert(qnx_mcu_request_projection(650, 736, qinggan11_611.mcu_projected_fields,
                                       qinggan11_611.name) ==
            qnx_mcu_projection(QnxGuestAdapter::sa8155_qinggan11_611));
 
@@ -58,16 +58,11 @@ int main() try {
     absent.erase("wire_fields");
     assert(!qnx_mcu_delivery_scope(Json{{"mcu_projection", absent}}));
 
-    const auto passion = qnx_passion_mcu_projection();
-    assert(qnx_mcu_request_projection(0, 0, 3, true) == passion);
-
-    for (const auto &args : {std::array<std::uint64_t, 4>{0, 0, 3, 0},
-                             {0, 0, 0, 1},
-                             {650, 736, 462, 1},
-                             {0, 0, 4, 1}}) {
+    // No adapter requests a scope without packet and wire geometry.
+    for (const auto &args : {std::array<std::uint64_t, 3>{0, 0, 3}, {650, 736, 462}}) {
         bool rejected = false;
         try {
-            qnx_mcu_request_projection(args[0], args[1], args[2], args[3] != 0);
+            qnx_mcu_request_projection(args[0], args[1], args[2]);
         } catch (const VoyemuError &) {
             rejected = true;
         }
@@ -75,26 +70,7 @@ int main() try {
         assert(rejected);
     }
 
-    const Json passion_ack{{"mcu_projection", passion}};
-    const auto passion_scope = qnx_mcu_delivery_scope(passion_ack, passion);
-    assert(passion_scope && passion_scope->at("fields") == 3 &&
-           passion_scope->at("full_wire_verified") == false);
-    assert(!qnx_mcu_delivery_scope(passion_ack));
-    assert(!qnx_mcu_delivery_scope(passion_ack, expected));
-    assert(!qnx_mcu_delivery_scope(Json::object(), passion));
-    assert(!qnx_mcu_delivery_scope(Json{{"mcu_projection", expected}}, passion));
-
-    for (const auto &patch :
-         {Json{{"projected_fields", 3.0}}, Json{{"unsupported_fields", 0}},
-          Json{{"hardware_adapter", "sa8155-qinggan11-731"}}, Json{{"transport", "mcu-wire"}},
-          Json{{"published_fields", nullptr}}}) {
-        auto wrong = passion;
-        wrong.update(patch);
-        assert(!qnx_mcu_delivery_scope(Json{{"mcu_projection", wrong}}, passion));
-        assert(!qnx_mcu_delivery_scope(passion_ack, wrong));
-    }
-
-    std::cout << "A9 full, Free and profile-bound Passion ACK scope guards passed\n";
+    std::cout << "A9 full and Free ACK scope guards passed\n";
 } catch (const std::exception &error) {
     std::cerr << error.what() << '\n';
 

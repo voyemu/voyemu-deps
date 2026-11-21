@@ -56,11 +56,6 @@ int voyemu::graphics_main(int argc, char **argv) {
                 continue;
             }
 
-            if (arg == "--passion-vehicle-topics") {
-                options.passion_vehicle_topics = true;
-                continue;
-            }
-
             if (i + 1 >= argc) {
                 throw voyemu::VoyemuError("GRAPHICS", "Missing worker argument value");
             }
