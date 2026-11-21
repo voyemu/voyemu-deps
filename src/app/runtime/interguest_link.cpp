@@ -3,6 +3,7 @@
 #include "interguest_network.hpp"
 #include "os/fs.hpp"
 #include "qnx_run_budget.hpp"
+#include "someip_gateway.hpp"
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -66,6 +67,7 @@ void store(std::uint32_t &v, std::uint32_t n) {
 struct InterguestLink::Impl {
     mutable std::mutex mutex;
     InterguestNetwork network;
+    std::unique_ptr<SomeipGateway> gateway;
     std::thread worker;
     std::atomic<bool> stopping = false;
     // Passion storage is inside the backing extent, outside the boot-mapped mailbox window.
@@ -639,7 +641,9 @@ struct InterguestLink::Impl {
                                 throw VoyemuError("INTERGUEST_PAGE", "invalid frame extent");
                             }
 
-                            if (network.status().connected && tx) {
+                            const auto now = std::chrono::steady_clock::now();
+
+                            if ((network.status().connected || gateway) && tx) {
                                 const auto seq = load(page->txseq);
                                 const auto next = txseq == 0xffffffffU ? 1U : txseq + 1U;
 
@@ -647,15 +651,39 @@ struct InterguestLink::Impl {
                                     throw VoyemuError("INTERGUEST_PAGE", "repeated TX sequence");
                                 }
 
-                                network.send(std::span(page->tx, tx), 10);
+                                const std::span<const std::uint8_t> frame(page->tx, tx);
+                                // Unicast to the gateway stays local; everything else also
+                                // reaches Android.
+                                const bool local = gateway && std::equal(SomeipGateway::mac.begin(),
+                                                                         SomeipGateway::mac.end(),
+                                                                         frame.begin());
+
+                                if (gateway) {
+                                    gateway->receive(frame, now);
+                                }
+
+                                if (network.status().connected && !local) {
+                                    network.send(frame, 10);
+                                }
+
                                 txseq = seq;
                                 store(page->txlen, 0);
                                 ++state.sent;
                             }
 
-                            if (network.status().connected && !rx) {
-                                std::vector<std::uint8_t> bytes;
+                            std::vector<std::uint8_t> bytes;
 
+                            if (!rx && gateway && gateway->next(bytes, now)) {
+                                std::memcpy(page->rx, bytes.data(), bytes.size());
+
+                                if (++rxseq == 0) {
+                                    ++rxseq;
+                                }
+
+                                store(page->rxseq, rxseq);
+                                store(page->rxlen, static_cast<std::uint32_t>(bytes.size()));
+                                ++state.received;
+                            } else if (network.status().connected && !rx) {
                                 if (network.receive(bytes, 1)) {
                                     if (!frame(static_cast<std::uint32_t>(bytes.size()))) {
                                         throw VoyemuError("INTERGUEST_PAGE",
@@ -1039,6 +1067,22 @@ InterguestLink::Status InterguestLink::status() const {
     std::lock_guard lock(impl_->mutex);
 
     return impl_->state;
+}
+
+void InterguestLink::attach_gateway(const Json &contract) {
+    auto gateway = std::make_unique<SomeipGateway>(someip_contract(contract));
+    std::lock_guard lock(impl_->mutex);
+    impl_->gateway = std::move(gateway);
+}
+
+unsigned InterguestLink::apply_vehicle_state(const Json &state) {
+    std::lock_guard lock(impl_->mutex);
+
+    if (!impl_->gateway) {
+        throw VoyemuError("INTERGUEST_GATEWAY", "no vehicle gateway attached");
+    }
+
+    return impl_->gateway->apply(state);
 }
 
 void InterguestLink::bind_android(std::uint64_t pid) {

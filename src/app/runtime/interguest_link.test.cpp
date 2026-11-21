@@ -517,6 +517,60 @@ int main(int argc, char **argv) try {
     std::filesystem::rename(uart_ram, ram);
     ring[0] = 0xbeefeeee;
     assert(pwrite(fd, ring.data(), 32, 0x10010000) == 32);
+    {
+        // The vehicle gateway answers guest frames without an Android peer: guest TX is consumed
+        // and its ARP reply and cyclic offers arrive in the guest RX mailbox.
+        auto *g = static_cast<unsigned char *>(
+                mmap(nullptr, 16384, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0));
+        assert(g != MAP_FAILED);
+        auto *gp = g + 4096;
+        auto *gw = reinterpret_cast<std::uint32_t *>(gp);
+        std::memset(gp, 0, 4096);
+        gw[0] = 0x54454e51;
+        gw[1] = 1;
+        InterguestLink gateway_link;
+        fail([&] {
+            gateway_link.apply_vehicle_state(voyemu::Json{{"raw_oem", voyemu::Json::object()}});
+        });
+        gateway_link.start(dir, token);
+        gateway_link.attach_gateway(voyemu::Json::parse(R"({"schema":1,"services":[
+            {"name":"VehicleDrivingInfo","vlan":12,"service":8192,"instance":1,"major":1,"events":[
+              {"name":"Notify_f_VehicleDrivingInform","event":32769,"eventgroups":[8192],"bytes":24,
+               "e2e":true,"fields":[{"name":"VehicleSpeed","offset":20,"bytes":4}]}]}]})"));
+        assert(gateway_link.apply_vehicle_state(voyemu::Json{{"raw_oem", {{"VehicleSpeed", 1}}}}) ==
+               1);
+        gateway_link.bind_ram(ram);
+        wait([&] {
+            return gateway_link.status().ready;
+        });
+        const unsigned char arp[46] = {
+                0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 2, 0, 0, 0, 0,   0x22, 0x81, 0, 0, 12,
+                0x08, 0x06, 0,    1,    8,    0,    6, 4, 0, 1, 2,   0,    0,    0, 0, 0x22,
+                172,  16,   112,  30,   0,    0,    0, 0, 0, 0, 172, 16,   112,  10};
+        std::memcpy(gp + 64, arp, sizeof arp);
+        gw[4] = 1;
+        __atomic_store_n(&gw[2], sizeof arp, __ATOMIC_RELEASE);
+        wait([&] {
+            return __atomic_load_n(&gw[2], __ATOMIC_ACQUIRE) == 0;
+        });
+        bool reply = false, offer = false;
+
+        for (int i = 0; i < 3 && !(reply && offer); ++i) {
+            wait([&] {
+                return __atomic_load_n(&gw[3], __ATOMIC_ACQUIRE) != 0;
+            });
+            const auto *rx = gp + 1600;
+            reply = reply || (rx[16] == 0x08 && rx[17] == 0x06 && rx[25] == 2 && rx[6] == 0x02 &&
+                              rx[7] == 0xdf && rx[8] == 0x53);
+            offer = offer || (rx[0] == 0x01 && rx[1] == 0x00 && rx[2] == 0x5e);
+            __atomic_store_n(&gw[3], 0, __ATOMIC_RELEASE);
+        }
+
+        assert(reply && offer && gateway_link.status().sent == 1 &&
+               gateway_link.status().fault.empty());
+        gateway_link.stop();
+        munmap(g, 16384);
+    }
     // Malformed mailbox is surfaced, while stop joins before releasing RAM.
     close(fd);
     fd = open(ram.c_str(), O_RDWR);

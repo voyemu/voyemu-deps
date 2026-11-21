@@ -1,4 +1,5 @@
 #pragma once
+#include "model.hpp"
 #include <cstdint>
 #include <filesystem>
 #include <memory>
@@ -32,6 +33,11 @@ public:
                   const std::filesystem::path &serial = {},
                   RamGeometry geometry = RamGeometry::free8g);
     void clear_ram();
+    // The vehicle gateway on the guest Ethernet (see SomeipGateway): guest frames reach it and
+    // Android; its frames go to the guest before Android's. The contract is a prepared one.
+    void attach_gateway(const Json &contract);
+    // Raw catalogue values of a vehicle state for the gateway; returns the changed fields.
+    unsigned apply_vehicle_state(const Json &state);
     void bind_android(std::uint64_t pid);
     // Guest sync completion within timeout_ms, at most 30 s scaled by qnx_guest_deadline for the
     // QNX engine of the host; failure leaves the owned guest running.
