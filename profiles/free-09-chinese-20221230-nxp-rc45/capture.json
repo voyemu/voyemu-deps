@@ -178,6 +178,41 @@
    "source": {
     "path": "/vendor/etc/selinux/vendor_sepolicy.cil"
    }
+  },
+  {
+   "name": "FontRobotoRegular",
+   "file": "fonts/Roboto-Regular.ttf",
+   "source": {
+    "path": "/system/fonts/Roboto-Regular.ttf"
+   }
+  },
+  {
+   "name": "FontRobotoMedium",
+   "file": "fonts/Roboto-Medium.ttf",
+   "source": {
+    "path": "/system/fonts/Roboto-Medium.ttf"
+   }
+  },
+  {
+   "name": "FontRobotoBold",
+   "file": "fonts/Roboto-Bold.ttf",
+   "source": {
+    "path": "/system/fonts/Roboto-Bold.ttf"
+   }
+  },
+  {
+   "name": "FontDfpRegular",
+   "file": "fonts/DFPKingGothicGB-Regular.ttf",
+   "source": {
+    "path": "/system/fonts/DFPKingGothicGB-Regular.ttf"
+   }
+  },
+  {
+   "name": "FontDfpSemibold",
+   "file": "fonts/DFPKingGothicGB-Semibold-Regular.ttf",
+   "source": {
+    "path": "/system/fonts/DFPKingGothicGB-Semibold-Regular.ttf"
+   }
   }
  ]
 }

@@ -1274,6 +1274,48 @@
       "scope": "Vector reconstruction based on the H53 manual and photographs; simulated hover boundaries are chosen for this emulator, not measured OEM sensor boundaries."
     }
   },
+  "fonts": {
+    "latin": {
+      "regular": {
+        "qnx": "system_la.img",
+        "path": "usr/share/fonts/NotoSans-Regular.ttf",
+        "bytes": 305872,
+        "sha256": "a52fdd375fb885e6ac21471b34e26e5cb6e58f1fa944519bff08d4400605bfed"
+      },
+      "medium": {
+        "qnx": "system_la.img",
+        "path": "usr/share/fonts/NotoSans-Bold.ttf",
+        "bytes": 310556,
+        "sha256": "6c9841ae63e266b77ee79820d62095a244d2e76d638b8a45ba3cb2c23f3e1932"
+      },
+      "bold": {
+        "qnx": "system_la.img",
+        "path": "usr/share/fonts/NotoSans-Bold.ttf",
+        "bytes": 310556,
+        "sha256": "6c9841ae63e266b77ee79820d62095a244d2e76d638b8a45ba3cb2c23f3e1932"
+      }
+    },
+    "cjk": {
+      "regular": {
+        "qnx": "system_la.img",
+        "path": "usr/share/fonts/NotoSansCJKsc-Regular.otf",
+        "bytes": 16412332,
+        "sha256": "1652500938055a232cfbfa321de6ebaadfc5635dd9f75e369bc991d14a6512dd"
+      },
+      "medium": {
+        "qnx": "system_la.img",
+        "path": "usr/share/fonts/NotoSansCJKsc-Medium.otf",
+        "bytes": 16489616,
+        "sha256": "0d01ee04b015315b457dfacdd3442e305d5bb183a9f355c0afda501f6fef39c6"
+      },
+      "bold": {
+        "qnx": "system_la.img",
+        "path": "usr/share/fonts/NotoSansCJKsc-Bold.otf",
+        "bytes": 16983244,
+        "sha256": "9cd6c106d54cec938405ae19388cb4bc685ad2ff0270d03358bf61aa67e1ccb9"
+      }
+    }
+  },
   "startupVideos": {
     "display0": {
       "file": "startup_video_screen_2.mp4",

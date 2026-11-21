@@ -186,6 +186,48 @@
       "source": {
         "package": "com.qinggan.QGBus"
       }
+    },
+    {
+      "name": "FontRobotoRegular",
+      "file": "fonts/Roboto-Regular.ttf",
+      "source": {
+        "path": "/system/fonts/Roboto-Regular.ttf"
+      }
+    },
+    {
+      "name": "FontRobotoMedium",
+      "file": "fonts/Roboto-Medium.ttf",
+      "source": {
+        "path": "/system/fonts/Roboto-Medium.ttf"
+      }
+    },
+    {
+      "name": "FontRobotoBold",
+      "file": "fonts/Roboto-Bold.ttf",
+      "source": {
+        "path": "/system/fonts/Roboto-Bold.ttf"
+      }
+    },
+    {
+      "name": "FontDfpRegular",
+      "file": "fonts/HuaKangJinGangHei-Regular-2.ttf",
+      "source": {
+        "path": "/system/fonts/HuaKangJinGangHei-Regular-2.ttf"
+      }
+    },
+    {
+      "name": "FontDfpMedium",
+      "file": "fonts/DFPKingGothicGB-Medium-2.ttf",
+      "source": {
+        "path": "/system/fonts/DFPKingGothicGB-Medium-2.ttf"
+      }
+    },
+    {
+      "name": "FontDfpSemibold",
+      "file": "fonts/DFPKingGothicGB-Semibold-2.ttf",
+      "source": {
+        "path": "/system/fonts/DFPKingGothicGB-Semibold-2.ttf"
+      }
     }
   ],
   "qnx": {

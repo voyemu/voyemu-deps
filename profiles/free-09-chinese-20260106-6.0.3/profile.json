@@ -7,6 +7,38 @@
     "assets": "profiles/common/wheels/free-2021",
     "androidRoutes": "src/app/android-wheel-routes.json"
   },
+  "fonts": {
+    "latin": {
+      "regular": {
+        "original": "FontRobotoRegular"
+      },
+      "medium": {
+        "original": "FontRobotoMedium"
+      },
+      "bold": {
+        "original": "FontRobotoBold"
+      }
+    },
+    "cjk": {
+      "regular": {
+        "original": "FontDfpRegular",
+        "corrected": {
+          "bytes": 1712864,
+          "sha256": "4f03e27101265730adf4634746350eb44aef725e8d8601a48a366a03cf8b6bd0"
+        }
+      },
+      "medium": {
+        "original": "FontDfpMedium"
+      },
+      "bold": {
+        "original": "FontDfpSemibold",
+        "corrected": {
+          "bytes": 1644272,
+          "sha256": "e8e460cdb59f41367d7c345aa1004f7d65c14c27685e60da5646a1385e846777"
+        }
+      }
+    }
+  },
   "android": {
     "package": "system-images;android-28;default;arm64-v8a",
     "revision": "1",
@@ -526,6 +558,78 @@
       "acquisition": {
         "image": "system",
         "path": "/system/priv-app/QGBus-release/QGBus-release.apk"
+      }
+    },
+    "FontRobotoRegular": {
+      "file": "fonts/Roboto-Regular.ttf",
+      "bytes": 305608,
+      "sha256": "797e35f7f5d6020a5c6ea13b42ecd668bcfb3bbc4baa0e74773527e5b6cb3174",
+      "source": {
+        "path": "/system/fonts/Roboto-Regular.ttf"
+      },
+      "acquisition": {
+        "image": "system",
+        "path": "/system/fonts/Roboto-Regular.ttf"
+      }
+    },
+    "FontRobotoMedium": {
+      "file": "fonts/Roboto-Medium.ttf",
+      "bytes": 306536,
+      "sha256": "7984aafeaf437899ce89b251d2875fc5048cb7d290152eac070239cca7ff726c",
+      "source": {
+        "path": "/system/fonts/Roboto-Medium.ttf"
+      },
+      "acquisition": {
+        "image": "system",
+        "path": "/system/fonts/Roboto-Medium.ttf"
+      }
+    },
+    "FontRobotoBold": {
+      "file": "fonts/Roboto-Bold.ttf",
+      "bytes": 306940,
+      "sha256": "36f3709dea3e3ce3c6aedc058079e55980825f898f1e901d091c73c40de8bab1",
+      "source": {
+        "path": "/system/fonts/Roboto-Bold.ttf"
+      },
+      "acquisition": {
+        "image": "system",
+        "path": "/system/fonts/Roboto-Bold.ttf"
+      }
+    },
+    "FontDfpRegular": {
+      "file": "fonts/HuaKangJinGangHei-Regular-2.ttf",
+      "bytes": 1697868,
+      "sha256": "b90b145194f1206b3d515e05d2bc2f27f2411aa0b6897f61755d7b812fe083c1",
+      "source": {
+        "path": "/system/fonts/HuaKangJinGangHei-Regular-2.ttf"
+      },
+      "acquisition": {
+        "image": "system",
+        "path": "/system/fonts/HuaKangJinGangHei-Regular-2.ttf"
+      }
+    },
+    "FontDfpMedium": {
+      "file": "fonts/DFPKingGothicGB-Medium-2.ttf",
+      "bytes": 1647384,
+      "sha256": "7d35517b8f48a9297dde75aefcf8a69c7020b0f87017df8e8ba0b0a04660243d",
+      "source": {
+        "path": "/system/fonts/DFPKingGothicGB-Medium-2.ttf"
+      },
+      "acquisition": {
+        "image": "system",
+        "path": "/system/fonts/DFPKingGothicGB-Medium-2.ttf"
+      }
+    },
+    "FontDfpSemibold": {
+      "file": "fonts/DFPKingGothicGB-Semibold-2.ttf",
+      "bytes": 1644272,
+      "sha256": "305f942097a1b65d1dca1c357c0197acf62346eea83e2fbe95cc55f62821f000",
+      "source": {
+        "path": "/system/fonts/DFPKingGothicGB-Semibold-2.ttf"
+      },
+      "acquisition": {
+        "image": "system",
+        "path": "/system/fonts/DFPKingGothicGB-Semibold-2.ttf"
       }
     }
   },

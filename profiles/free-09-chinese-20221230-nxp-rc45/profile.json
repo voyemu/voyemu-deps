@@ -60,6 +60,42 @@
   "assets": "profiles/common/wheels/free-2021",
   "androidRoutes": "profiles/free-09-chinese-20221230-nxp-rc45/files/wheel-routes.json"
  },
+ "fonts": {
+  "latin": {
+   "regular": {
+    "original": "FontRobotoRegular"
+   },
+   "medium": {
+    "original": "FontRobotoMedium"
+   },
+   "bold": {
+    "original": "FontRobotoBold"
+   }
+  },
+  "cjk": {
+   "regular": {
+    "original": "FontDfpRegular",
+    "corrected": {
+     "bytes": 1712864,
+     "sha256": "4f03e27101265730adf4634746350eb44aef725e8d8601a48a366a03cf8b6bd0"
+    }
+   },
+   "medium": {
+    "original": "FontDfpSemibold",
+    "corrected": {
+     "bytes": 1644272,
+     "sha256": "e8e460cdb59f41367d7c345aa1004f7d65c14c27685e60da5646a1385e846777"
+    }
+   },
+   "bold": {
+    "original": "FontDfpSemibold",
+    "corrected": {
+     "bytes": 1644272,
+     "sha256": "e8e460cdb59f41367d7c345aa1004f7d65c14c27685e60da5646a1385e846777"
+    }
+   }
+  }
+ },
  "emulator": {
   "port": 5586,
   "memory": 4096,
@@ -3635,6 +3671,66 @@
    "acquisition": {
     "image": "system",
     "path": "/system/media/bootanimation1.zip"
+   }
+  },
+  "FontRobotoRegular": {
+   "file": "fonts/Roboto-Regular.ttf",
+   "bytes": 158604,
+   "sha256": "16466ef65064e6f3885a6d2806b8949ac1ac38b524dd0cf8fc96565eb4cc28e8",
+   "source": {
+    "path": "/system/fonts/Roboto-Regular.ttf"
+   },
+   "acquisition": {
+    "image": "system",
+    "path": "/system/fonts/Roboto-Regular.ttf"
+   }
+  },
+  "FontRobotoMedium": {
+   "file": "fonts/Roboto-Medium.ttf",
+   "bytes": 160696,
+   "sha256": "02868d6a7e80d4e7836b6263dd50d26a63e923a1223c9e027aad6dc2501c27cc",
+   "source": {
+    "path": "/system/fonts/Roboto-Medium.ttf"
+   },
+   "acquisition": {
+    "image": "system",
+    "path": "/system/fonts/Roboto-Medium.ttf"
+   }
+  },
+  "FontRobotoBold": {
+   "file": "fonts/Roboto-Bold.ttf",
+   "bytes": 163448,
+   "sha256": "24571503140760240924dcd1238f77e7cd0454c0d8b0793990cefa2fad71471f",
+   "source": {
+    "path": "/system/fonts/Roboto-Bold.ttf"
+   },
+   "acquisition": {
+    "image": "system",
+    "path": "/system/fonts/Roboto-Bold.ttf"
+   }
+  },
+  "FontDfpRegular": {
+   "file": "fonts/DFPKingGothicGB-Regular.ttf",
+   "bytes": 1697868,
+   "sha256": "b90b145194f1206b3d515e05d2bc2f27f2411aa0b6897f61755d7b812fe083c1",
+   "source": {
+    "path": "/system/fonts/DFPKingGothicGB-Regular.ttf"
+   },
+   "acquisition": {
+    "image": "system",
+    "path": "/system/fonts/DFPKingGothicGB-Regular.ttf"
+   }
+  },
+  "FontDfpSemibold": {
+   "file": "fonts/DFPKingGothicGB-Semibold-Regular.ttf",
+   "bytes": 1644272,
+   "sha256": "305f942097a1b65d1dca1c357c0197acf62346eea83e2fbe95cc55f62821f000",
+   "source": {
+    "path": "/system/fonts/DFPKingGothicGB-Semibold-Regular.ttf"
+   },
+   "acquisition": {
+    "image": "system",
+    "path": "/system/fonts/DFPKingGothicGB-Semibold-Regular.ttf"
    }
   }
  },

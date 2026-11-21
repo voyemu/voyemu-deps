@@ -1,4 +1,5 @@
 #include "android_java.hpp"
+#include "portable_fonts.hpp"
 #include "profile_build_internal.hpp"
 #include "project_files.hpp"
 
@@ -508,6 +509,7 @@ static void export_android_machine_parts(const std::filesystem::path &root,
     }
 
     runtime["resources"] = export_portable_resources(root, definition, profile, stage);
+    runtime["resources"].update(export_portable_fonts(root, definition, profile, stage));
 }
 
 Json finalize_profile_build(const std::filesystem::path &root, std::string_view profile,
@@ -1192,6 +1194,7 @@ Json profile_built_frontend_bindings(const std::filesystem::path &root, std::str
     const auto splash = portable_resource_path(source, "ui/splash.png");
     (void)portable_resource_path(source, "ui/wheel/wheel-hotspots.json");
     frontend["assets"] = assets.string();
+    frontend["fonts"] = (source / "ui/fonts").string();
     frontend["splash"] = splash.string();
 
     if (const auto startup = portable_startup_animations(source); !startup.is_null()) {
@@ -1241,6 +1244,15 @@ Json profile_built_frontend_bindings(const std::filesystem::path &root, std::str
         need(!item.is_symlink(), "linked wheel asset rejected");
 
         if (item.is_regular_file()) {
+            frontend["pins"].push_back(
+                    {{"path", item.path().string()}, {"sha256", hash(item.path(), 64ULL << 20)}});
+        }
+    }
+
+    // The car fonts of a machine whose profile declares them.
+    if (std::filesystem::is_directory(source / "ui/fonts")) {
+        for (const auto &item : std::filesystem::directory_iterator(source / "ui/fonts")) {
+            need(!item.is_symlink() && item.is_regular_file(), "ordinary machine font required");
             frontend["pins"].push_back(
                     {{"path", item.path().string()}, {"sha256", hash(item.path(), 64ULL << 20)}});
         }

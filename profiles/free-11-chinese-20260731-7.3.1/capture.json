@@ -226,6 +226,20 @@
       "source": {
         "package": "com.qinggan.QGBus"
       }
+    },
+    {
+      "name": "FontRobotoRegular",
+      "file": "fonts/Roboto-Regular.ttf",
+      "source": {
+        "path": "/system/fonts/Roboto-Regular.ttf"
+      }
+    },
+    {
+      "name": "FontRobotoBold",
+      "file": "fonts/Roboto-Bold.ttf",
+      "source": {
+        "path": "/system/fonts/Roboto-Bold.ttf"
+      }
     }
   ]
 }

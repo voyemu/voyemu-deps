@@ -31,9 +31,12 @@ inline std::filesystem::path portable_resource_relative(std::string_view name) {
     return path;
 }
 
-// OEM boot animations and the frames of the OEM startup videos are larger than the own UI images.
+// OEM boot animations, the frames of the OEM startup videos and the car fonts are larger than the
+// own UI images.
 inline std::uint64_t portable_resource_limit(std::string_view name) {
-    return name.starts_with("ui/startup/") ? 256ULL << 20 : 16ULL << 20;
+    return name.starts_with("ui/startup/") ? 256ULL << 20
+           : name.starts_with("ui/fonts/") ? 32ULL << 20
+                                           : 16ULL << 20;
 }
 
 // The imported OEM boot animation of each multimedia screen, by its original role.

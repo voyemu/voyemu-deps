@@ -1692,6 +1692,7 @@ static void frontend_binding_checks(const std::filesystem::path &stage) {
 
     if (bound_path("executable") != built_root / window_name ||
         bound_path("assets") != prepared / "ui/wheel" ||
+        bound_path("fonts") != prepared / "ui/fonts" ||
         bound_path("splash") != prepared / "ui/splash.png" || built.at("startup").size() != 2 ||
         !built.at("startup")[1].is_null() ||
         std::filesystem::path(built.at("startup")[0].get<std::string>()) !=

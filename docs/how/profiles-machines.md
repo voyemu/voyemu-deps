@@ -25,7 +25,9 @@ The `emulator` field of `profile.json` sets the Android emulator of the machine:
 
 The `wheel` field of `profile.json` names the steering-wheel artwork in `assets` and the Android key routes in `androidRoutes`; `provider` set to `com.voyemu.input.wheel` delivers the wheel to Android through that content provider of the profile instead of the routes.
 
-Shared parts live outside the profiles: `profiles/common/` holds common components, fonts, icons and steering-wheel artwork, and `profiles/common-qinggan-09/` and `profiles/common-qinggan-11/` hold the development kernel recipes of each Android generation.
+Shared parts live outside the profiles: `profiles/common/` holds common components, icons and steering-wheel artwork, and `profiles/common-qinggan-09/` and `profiles/common-qinggan-11/` hold the development kernel recipes of each Android generation.
+
+The `fonts` field of `profile.json` names the fonts of the vehicle that the [window](window.md#fonts) draws with: `latin` for Latin and Cyrillic and `cjk` for Chinese, each with `regular`, `medium` and `bold`. A font is an OEM input of the profile, a file inside an OEM APK or a file of an imported QNX image, each with its size and SHA-256.
 
 OEM inputs never enter the repository. The user imports them into `.local/profiles/<profile>/`, and the profile records only their names, sizes and SHA-256.
 
@@ -39,7 +41,7 @@ A machine is a prepared directory under `machines/<name>/`. `voyemu build PROFIL
 | `profile.json` | The embedded copy of the authoring profile |
 | `android/` | Android system and vendor images, the kernel, writable user and cache disks, installed packages |
 | `qnx/` | QNX boot images and the writable QNX disk; only when the cluster is prepared |
-| `ui/` | Voyemu logo, OEM boot animations in `ui/startup/`, steering-wheel artwork and button routes |
+| `ui/` | Voyemu logo, OEM boot animations in `ui/startup/`, the fonts of the vehicle in `ui/fonts/`, steering-wheel artwork and button routes |
 
 `runtime.json` appears last, after the guests have booted for verification, so a directory without it is not a machine. Lifecycle commands select a machine by its path, relative or absolute, also outside the installation root, and infer the profile from `runtime.json`.
 

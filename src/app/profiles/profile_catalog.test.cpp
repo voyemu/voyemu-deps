@@ -528,6 +528,20 @@ int main(int argc, char **argv) {
             source >> original;
             check(item.at("definition") == original,
                   "complete definition survives embedding without escaping changes");
+            const auto fonts = original.value("fonts", Json::object());
+
+            // The window draws with the car fonts that every machine carries.
+            for (const auto *script : {"latin", "cjk"}) {
+                for (const auto *weight : {"regular", "medium", "bold"}) {
+                    check(fonts.size() == 2 && fonts.contains(script) &&
+                                  fonts.at(script).size() == 3 &&
+                                  fonts.at(script).contains(weight) &&
+                                  (fonts.at(script).at(weight).contains("original") ||
+                                   fonts.at(script).at(weight).contains("qnx")),
+                          "every profile declares the car fonts of the window");
+                }
+            }
+
             check(item.at("sha256") ==
                           sha256_file(std::filesystem::path(argv[1]) / id / "profile.json"),
                   "embedded profile matches exact source bytes");
@@ -1243,9 +1257,9 @@ int main(int argc, char **argv) {
         Json qinggan11_capture;
         qinggan11_capture_source >> qinggan11_capture;
         check(qinggan11_capture.at("profile") == qinggan11_id &&
-                      qinggan11_capture.at("android").size() == 32 &&
-                      a11.at("original").size() == 33,
-              "A11 capture retains 32 roles plus the separately acquired Phone original");
+                      qinggan11_capture.at("android").size() == 34 &&
+                      a11.at("original").size() == 35,
+              "A11 capture retains 34 roles plus the separately acquired Phone original");
 
         for (const auto &capture : qinggan11_capture.at("android")) {
             const auto &original = a11.at("original").at(capture.at("name").get<std::string>());
@@ -1566,7 +1580,7 @@ int main(int argc, char **argv) {
                                     {{"image", "system"},
                                      {"path",
                                       "/system/priv-app/KeyManagerService-release/KeyManagerService-release.apk"}}}} &&
-                      a11.at("original").size() == 33,
+                      a11.at("original").size() == 35,
               "Free wheel must bind actual acquired OEM KeyManager");
         check(a11.at("components").at("wheel-input") == "components/wheel-input" &&
                       a11.at("components").at("wheel-platform") == "components/wheel-platform" &&
