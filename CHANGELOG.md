@@ -17,6 +17,7 @@ Unreleased prerelease. It fixes Windows storage checks, Android Quick Boot and n
 - Window: Voyemu draws the toggles, the selected radio option and the light panel background itself instead of using OEM textures; the gear, scale and language radios are as high as the input fields.
 - Errors: a failure without its own code reports `FILESYSTEM` with the operation, the path and the reason given by the system, or `SYSTEM` or `JSON` with its reason, instead of `INTERNAL_ERROR`.
 - There is no default profile: `deps` without a profile installs only the tools, and `deps` and `build` reject an unknown profile.
+- Vehicle model on Passion: its own catalog of the 1598 signals the cluster receives over SOME/IP, with raw wire values; `vehicle.fields` gives each Passion field its signal declaration and each bound field its vehicle concept and encoding. Saved Passion scenarios of the earlier catalog are not read.
 
 ## 1.0.0-beta1 — 2026-11-18
 

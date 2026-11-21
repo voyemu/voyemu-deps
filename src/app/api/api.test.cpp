@@ -1267,6 +1267,23 @@ int main(int argc, char **argv) try {
         const auto &fields = described.at("result").at("fields");
         assert(fields.size() == 579);
 
+        // A bound field names its concept and encoding; the concept range limits its primary.
+        const auto field_named = [](const Json &list, std::string_view name) {
+            return *std::find_if(list.begin(), list.end(), [&](const Json &field) {
+                return field.at("name") == name;
+            });
+        };
+        assert(field_named(fields, "speed").at("unit") == "km/h" &&
+               field_named(fields, "speed10x").at("unit") == "0.1 km/h" &&
+               field_named(fields, "soc").at("unit") == "percent" &&
+               field_named(fields, "soc").at("maximum") == 100 &&
+               field_named(fields, "odo").at("unit") == "raw_oem" &&
+               !field_named(fields, "odo").contains("concept") &&
+               field_named(fields, "speed10x").at("concept").at("role") == "mirror" &&
+               field_named(fields, "door_fl").at("concept").at("name") == "door_front_left" &&
+               described.at("result").at("concepts").size() ==
+                       concept_bindings(VehicleCatalog::qinggan09).size());
+
         for (const auto &field : fields) {
             const auto name = field.at("name").get<std::string>();
             assert(field.at("delivery") == (name == "soc" ? Json::array({"cluster", "multimedia"})
@@ -1292,6 +1309,23 @@ int main(int argc, char **argv) try {
                    result.at("fields").size() == catalog(vehicle_catalog(platform)).size() &&
                    result.at("map_sha256") == catalog_map_sha256(vehicle_catalog(platform)) &&
                    !result.at("fields").at(0).contains("delivery"));
+
+            // Passion fields carry the declaration of the OEM SOME/IP service table.
+            if (platform == "passion") {
+                const auto speed =
+                        field_named(result.at("fields"),
+                                    concept_field(VehicleCatalog::passion, VehicleConcept::speed));
+                assert(speed.at("signal").at("id") == 212 &&
+                       speed.at("signal").at("resolution") == 0.01 &&
+                       speed.at("signal").at("offset") == -500.0 && speed.at("unit") == "kmph" &&
+                       speed.at("minimum") == 50000 && speed.at("maximum") == 75500 &&
+                       speed.at("concept").at("name") == "speed");
+                const auto ready =
+                        field_named(result.at("fields"),
+                                    concept_field(VehicleCatalog::passion, VehicleConcept::ready));
+                assert(ready.at("signal").at("values").at("2") == "OnOffSts_ON" &&
+                       ready.at("concept").at("encoding").at("invalid") == 255);
+            }
         }
     }
     {

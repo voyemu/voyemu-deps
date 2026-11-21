@@ -74,7 +74,7 @@ std::vector<ConceptBinding> qinggan11_bindings() {
 
     // The VCU of a qinggan11 vehicle reports READY in its own flag beside the lamp.
     result.push_back({ready, {primary("ready_lamp"), follower("vcu_ready")}});
-    // ADCU_VsetDis in whole km/h with 255 as no speed: the OEM 7.3.1
+    // ADCU_VsetDis in whole km/h with 255 as no speed: the OEM qinggan11
     // dataprocesser_interface_ACC_speed shows 255 and a CAN timeout as no speed and clamps every
     // other value to 20..150 km/h.
     result.push_back({acc_target_speed, {primary("ADCU_VsetDis", linear(1, 0, 255))}});
@@ -413,8 +413,7 @@ Json concept_change(const Json &state, VehicleConcept id, std::int64_t logical) 
     return patch;
 }
 
-void concept_assign(VehicleCatalog catalog, Json &raw, VehicleConcept id,
-                    std::int64_t logical) {
+void concept_assign(VehicleCatalog catalog, Json &raw, VehicleConcept id, std::int64_t logical) {
     const auto *binding = concept_binding(catalog, id);
 
     if (!binding) {

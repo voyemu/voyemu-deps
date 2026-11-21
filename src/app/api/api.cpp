@@ -2,6 +2,8 @@
 #include "error.hpp"
 #include "field_delivery.hpp"
 #include "version.hpp"
+#include <algorithm>
+#include <sstream>
 
 namespace voyemu::api {
 using namespace detail;
@@ -1730,29 +1732,138 @@ Json Api::dispatch_catalog(const std::string &op, const Json &request, Clock::ti
         }
 
         auto fields = catalog_json(catalog);
+        const auto signals = catalog_signals(catalog);
+        auto encoding_json = [](const ConceptEncoding &encoding) {
+            Json result = {{"resolution", encoding.resolution}, {"offset", encoding.offset}};
 
-        for (auto &field : fields) {
-            auto name = field.at("name").get<std::string>();
-            field["minimum"] = 0;
-            field["maximum"] = field_maximum(field.at("width").get<unsigned>());
+            if (!encoding.values.empty()) {
+                result = {{"values", Json::array()}};
 
-            if (name == "soc") {
-                field["maximum"] = 100;
+                for (const auto &value : encoding.values) {
+                    result["values"].push_back({{"logical", value.logical}, {"raw", value.raw}});
+                }
             }
 
+            if (encoding.invalid) {
+                result["invalid"] = *encoding.invalid;
+            }
+
+            return result;
+        };
+
+        for (std::size_t i = 0; i < fields.size(); ++i) {
+            auto &field = fields[i];
+            const auto name = field.at("name").get<std::string>();
+            const auto width = field.at("width").get<unsigned>();
+            field["minimum"] = 0;
+            field["maximum"] = field_maximum(width);
             field["write"] = name.starts_with("swm_") ? "wheel_event_only" : "raw_patch";
-            field["unit"] = name == "speed"      ? "km/h"
-                            : name == "speed10x" ? "0.1 km/h"
-                            : name == "soc"      ? "percent"
-                                                 : "raw_oem";
+            field["unit"] = "raw_oem";
+
+            // The declaration of the OEM signal table, from which a client converts raw values.
+            if (!signals.empty()) {
+                const auto &signal = signals[i];
+                Json declared = {{"id", signal.id}, {"type", signal.type}};
+
+                for (const auto &[key, value] : {std::pair{"resolution", signal.resolution},
+                                                 {"offset", signal.offset},
+                                                 {"minimum", signal.minimum},
+                                                 {"maximum", signal.maximum}}) {
+                    if (value) {
+                        declared[key] = *value;
+                    }
+                }
+
+                if (signal.invalid) {
+                    declared["invalid"] = *signal.invalid;
+                }
+
+                if (!signal.unit.empty()) {
+                    declared["unit"] = signal.unit;
+                    field["unit"] = signal.unit;
+                }
+
+                if (!signal.options.empty()) {
+                    declared["values"] = Json::object();
+
+                    for (const auto &option : signal.options) {
+                        declared["values"][std::to_string(option.raw)] = option.name;
+                    }
+                }
+
+                field["signal"] = std::move(declared);
+            }
+
+            // A bound field names its concept, its role and the encoding of the concept in it; the
+            // range of a concept limits its primary field.
+            if (const auto *binding = field_binding(catalog, name)) {
+                const auto &definition = concept_definition(binding->id);
+                const auto item = std::find_if(binding->fields.begin(), binding->fields.end(),
+                                               [&](const ConceptField &bound) {
+                                                   return bound.field == name;
+                                               });
+                const auto linear = item->encoding.values.empty();
+                field["concept"] = {{"name", definition.name},
+                                    {"unit", definition.unit},
+                                    {"role", item->role == ConceptRole::primary  ? "primary"
+                                             : item->role == ConceptRole::mirror ? "mirror"
+                                                                                 : "follower"},
+                                    {"encoding", encoding_json(item->encoding)}};
+
+                if (signals.empty() && linear && item->encoding.offset == 0 &&
+                    definition.unit.find("flag") == std::string_view::npos &&
+                    definition.id != VehicleConcept::gear) {
+                    std::ostringstream unit;
+                    unit << item->encoding.resolution;
+                    field["unit"] = item->encoding.resolution == 1
+                                            ? std::string(definition.unit)
+                                            : unit.str() + " " + std::string(definition.unit);
+                }
+
+                if (item->role == ConceptRole::primary && linear) {
+                    if (definition.minimum) {
+                        if (const auto raw = concept_encode(item->encoding, *definition.minimum,
+                                                            width)) {
+                            field["minimum"] = *raw;
+                        }
+                    }
+
+                    if (definition.maximum) {
+                        if (const auto raw = concept_encode(item->encoding, *definition.maximum,
+                                                            width)) {
+                            field["maximum"] = *raw;
+                        }
+                    }
+                }
+            }
 
             if (delivery) {
                 field["delivery"] = field_delivery_json(*delivery, name);
             }
         }
 
+        auto concepts = Json::array();
+
+        for (const auto &binding : concept_bindings(catalog)) {
+            const auto &definition = concept_definition(binding.id);
+            Json item = {{"name", definition.name},
+                         {"unit", definition.unit},
+                         {"field", binding.fields.front().field}};
+
+            if (definition.minimum) {
+                item["minimum"] = *definition.minimum;
+            }
+
+            if (definition.maximum) {
+                item["maximum"] = *definition.maximum;
+            }
+
+            concepts.push_back(std::move(item));
+        }
+
         return {{"map_sha256", catalog_map_sha256(catalog)},
                 {"fields", fields},
+                {"concepts", concepts},
                 {"validation", "atomic OEM widths and coupled fields; SOC <= 100; whole km/h"},
                 {"raw_adas_injection", true}};
     }

@@ -16,6 +16,8 @@ Every external input has an exact version, a URL and a SHA-256, recorded in one 
 
 OEM inputs are pinned by name, size and SHA-256 only; their bytes never enter the repository. Files of the repository itself are never pinned. Code reads every pin from its file and never repeats it.
 
+The Passion field catalog `src/app/core/passion_catalog.inc` is generated from an OEM file: `src/app/core/generator/GeneratePassionCatalog.java` reads the SOME/IP service table `H53_SOMEIP_ServiceTable_V6.0.0_OIB_8155_QNX_20240103-142433.json` extracted from `system_la.img` of the Passion profile, checks its SHA-256, which is also the `map_sha256` of a Passion state, and writes the catalog; its Javadoc gives the commands.
+
 System libraries that a host loads at run time are not downloads and have no pin: on Linux these are libcurl and OpenSSL 3 libcrypto, loaded by their stable names `libcurl.so.4` and `libcrypto.so.3`.
 
 ## Updating a dependency
