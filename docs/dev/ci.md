@@ -16,7 +16,7 @@ Twelve GitHub Actions workflows live in `.github/workflows/`: `ci` checks the so
 | `windows-cross` | Ubuntu 24.04 | Cross-builds Windows executables, checks that no PDB was produced and runs selected PE behavior suites under pinned Wine |
 | `windows-native` | Windows Server 2022 | Builds natively, runs `voyemu.exe --help` and runs CTest without the `oem` and `deps` labels |
 
-The jobs repeat the commands of [checks](checks.md), [build](build.md) and [tests](tests.md), so a local run reproduces a CI failure. Native build jobs run the host-only layer with `--label-exclude 'oem|deps'`. The `source-fixtures` matrix adds the selected dependency behavior suites with pinned public tools and rejects missing suites or skips; these two layers do not establish OEM acceptance. Strict OEM runners need imported originals and fail when inputs are absent. See [test labels](tests.md#registration-and-labels).
+The jobs repeat the commands of [checks](checks.md), [build](build.md) and [tests](tests.md), so a local run reproduces a CI failure. After the build, `linux`, `macos-native` and `windows-cross` print the size of the launcher and of its sections (`size -A`, `size -m`, `objdump -h`) and `windows-native` its size, so size changes can be compared between commits. Native build jobs run the host-only layer with `--label-exclude 'oem|deps'`. The `source-fixtures` matrix adds the selected dependency behavior suites with pinned public tools and rejects missing suites or skips; these two layers do not establish OEM acceptance. Strict OEM runners need imported originals and fail when inputs are absent. See [test labels](tests.md#registration-and-labels).
 
 ### Cross-built Windows tests under Wine
 

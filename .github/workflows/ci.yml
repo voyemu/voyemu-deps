@@ -83,6 +83,8 @@ jobs:
             - run: cmake -S src/app -B .local/build/linux -G Ninja -DCMAKE_TOOLCHAIN_FILE="$PWD/src/dev/toolchains/zig-linux-x64.cmake" -DBUILD_TESTING=ON
             - run: cmake --build .local/build/linux --parallel 4
             - run: ./.local/build/linux/voyemu --help
+            # The size of the launcher and of its sections, to compare size changes between commits.
+            - run: ls -l .local/build/linux/voyemu && size -A .local/build/linux/voyemu
             # Tests labeled deps need toolchains installed by deps and tests labeled oem need imported OEM inputs.
             - name: Install pinned KornShell for startup fence tests
               run: |
@@ -132,6 +134,7 @@ jobs:
             - run: cmake --build .local/build/native-host --parallel 3
             - run: ./.local/build/native-host/voyemu --help
             - run: codesign --verify --strict ./.local/build/native-host/voyemu
+            - run: ls -l .local/build/native-host/voyemu && size -m .local/build/native-host/voyemu
             - run: ctest --test-dir .local/build/native-host --label-exclude 'oem|deps' --output-on-failure --parallel 1
 
     windows-cross:
@@ -155,6 +158,7 @@ jobs:
             - run: cmake --build .local/build/windows-cross --parallel 4
             # Cross-built binaries run through Wine below; no PDB may be produced.
             - run: test -f .local/build/windows-cross/voyemu.exe && test -z "$(find .local/build/windows-cross -name '*.pdb' -print -quit)"
+            - run: ls -l .local/build/windows-cross/voyemu.exe && objdump -h .local/build/windows-cross/voyemu.exe
             - run: bash src/dev/ci/wine-install.sh
             - run: |
                   mkdir -p "$WINEPREFIX"
@@ -202,6 +206,7 @@ jobs:
             - run: cmake -S src/app -B .local/build/windows-native -G Ninja -DCMAKE_TOOLCHAIN_FILE="$PWD/src/dev/toolchains/zig-windows-x64.cmake" -DBUILD_TESTING=ON
             - run: cmake --build .local/build/windows-native --parallel 4
             - run: .\.local\build\windows-native\voyemu.exe --help
+            - run: (Get-Item .local/build/windows-native/voyemu.exe).Length
             # Host-only checks exclude dependency and OEM suites; missing inputs remain failures in strict suites.
             - name: Run native Windows host tests
               id: host-tests
