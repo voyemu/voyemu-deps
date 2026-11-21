@@ -635,12 +635,12 @@ void observer_build_snapshot_checks(const std::filesystem::path &stage) {
     }
 }
 
-void qnx_upgrade_checks(const std::filesystem::path &stage, bool older = false) {
-    const std::string profile = older ? "free-11-chinese-20250710-6.11.1"
-                                      : "free-11-chinese-20260731-7.3.1",
+void qnx_upgrade_checks(const std::filesystem::path &stage, bool firmware_611 = false) {
+    const std::string profile = firmware_611 ? "free-11-chinese-20250710-6.11.1"
+                                             : "free-11-chinese-20260731-7.3.1",
                       machine = "";
     const auto selected_machine = machine_identity(profile, machine);
-    const auto root = stage / (older ? "qnx-upgrade611" : "qnx-upgrade"),
+    const auto root = stage / (firmware_611 ? "qnx-upgrade611" : "qnx-upgrade"),
                seed = root / "machines" / profile, data = seed / "android",
                scoped = root / ".local/machines" / profile;
 
@@ -675,15 +675,10 @@ void qnx_upgrade_checks(const std::filesystem::path &stage, bool older = false) 
     ensure_private_directory(seed / "qnx");
     auto with_qnx = read_private_json(seed / "runtime.json");
     Json old_qnx = {{"guest_arch", "aarch64"}, {"images", Json::object()}}, new_qnx = old_qnx;
-    const auto qnx_layout = qnx_runtime_layout(older ? "sa8155-qinggan11-611"
-                                                     : "sa8155-qinggan11-731");
+    const auto qnx_layout = qnx_runtime_layout(firmware_611 ? "sa8155-qinggan11-611"
+                                                            : "sa8155-qinggan11-731");
     qnx_runtime_metadata(old_qnx, qnx_layout);
     qnx_runtime_metadata(new_qnx, qnx_layout);
-
-    if (older) {
-        old_qnx["mcu_projection"]["projected_fields"] = 33;
-        old_qnx["mcu_projection"]["unsupported_fields"] = 546;
-    }
 
     for (const auto &name : qnx_layout.images) {
         const auto old_file = seed / "qnx" / name, new_file = qnx_source / "qnx" / name;
