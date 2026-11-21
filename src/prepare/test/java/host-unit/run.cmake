@@ -6,7 +6,7 @@ include("${CMAKE_CURRENT_LIST_DIR}/../../java_source_dependencies.cmake")
 # Classes that take the repository root as their only argument.
 set(ROOT_TESTS
     Api28WrapperCodecTest Api30RecipesTest ArchivesTest ArgumentsTest CarAvailabilityTest
-    FrameworkBridgeVerifierTest FrameworkDexMaterializerTest BluetoothComponentProducerTest
+    FontCyrillicFixTest FrameworkBridgeVerifierTest FrameworkDexMaterializerTest BluetoothComponentProducerTest
     OwnAudioComponentsProducerTest PhonePackageProducerTest HiboardNormalizationTest
     NativeFilesTest SettingsVoiceMuteRecipeTest KeyManagerIngressRecipeTest
     KeyManagerRecipeTest OriginalNaviIdentityRecipesTest SettingsVoiceCloneRecipeTest
