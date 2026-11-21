@@ -23,6 +23,13 @@ add_compile_options("$<$<COMPILE_LANGUAGE:C,CXX,OBJC,OBJCXX>:-ffunction-sections
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     add_compile_options("$<$<COMPILE_LANGUAGE:C>:-fno-asynchronous-unwind-tables;-fno-unwind-tables>")
 endif()
+# A build without tests, as the release builds the launcher, links with full LTO on Linux and Windows;
+# the Zig Mach-O linker refuses LTO. Test builds keep native objects, so the test executables link
+# without LTO. See docs/why/size-optimized-release.md.
+if(DEFINED BUILD_TESTING AND NOT BUILD_TESTING AND NOT APPLE)
+    add_compile_options("$<$<COMPILE_LANGUAGE:C,CXX>:-flto=full>")
+    add_link_options(-flto=full)
+endif()
 set(voyemu_frame_path_sources graphics/frame_transport.cpp graphics/graphics.cpp graphics/graphics_main.cpp
     graphics/graphics_protocol.cpp graphics/graphics_ram.cpp os/graphics_ram_posix.cpp os/graphics_ram_windows.cpp
     runtime/media_wire.cpp runtime/media_rpc.cpp platform/media_view.cpp platform/window_image.cpp
