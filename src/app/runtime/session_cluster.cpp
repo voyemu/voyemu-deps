@@ -432,6 +432,11 @@ void Session::attach_cluster(const Json &input, std::optional<unsigned> seconds,
             interguest_link_->start(directory_, session_id_,
                                     android_spec_.contains("diagnostic_native"));
         }
+
+        if (const auto contract = qnx_someip_gateway(specification)) {
+            interguest_link_->attach_gateway(*contract);
+            someip_sequence_ = 0;
+        }
     }
 
     const auto ram_backend = specification.value("ram_backend", std::string("file"));
@@ -871,6 +876,17 @@ void Session::poll_qnx() {
                 {"utc_complete", link.utc_complete},
                 {"utc_verified", utc_verified},
                 {"fault", link.fault}};
+
+        // Every new vehicle state reaches the gateway as raw catalogue values.
+        if (cluster_spec_.contains("someip_gateway") &&
+            state_catalog(model_.state()) == VehicleCatalog::passion &&
+            model_.state().at("sequence").get<std::uint64_t>() != someip_sequence_) {
+            const auto changed = interguest_link_->apply_vehicle_state(model_.state());
+            someip_sequence_ = model_.state().at("sequence").get<std::uint64_t>();
+            deliveries_["qnx"]["someip_gateway"] = {{"sequence", someip_sequence_},
+                                                    {"changed_fields", changed}};
+        }
+
         interguest_link_->check();
     }
 

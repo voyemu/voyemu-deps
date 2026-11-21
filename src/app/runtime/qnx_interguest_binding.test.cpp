@@ -2,6 +2,8 @@
 #include "qnx_owned_ram.hpp"
 #include "qnx_process_ram.hpp"
 #include "qnx_runtime_layout.hpp"
+#include <filesystem>
+#include <unistd.h>
 #ifdef NDEBUG
 #undef NDEBUG
 #endif
@@ -157,6 +159,35 @@ int main() try {
         assert(!ram.passion &&
                qnx_owned_ram_bytes(Json{{"ram_geometry", qnx_owned_ram_geometry(ram)}}) ==
                        (8ULL << 30));
+    }
+    {
+        // The pinned gateway contract of a cluster launch; none without the field.
+        assert(!qnx_someip_gateway(passion()));
+        const auto directory = std::filesystem::current_path() / ".local/build/tmp" /
+                               ("someip-gateway-" + std::to_string(::getpid()));
+        std::filesystem::create_directories(directory);
+        std::filesystem::permissions(directory, std::filesystem::perms::owner_all);
+        const auto file = directory / "someip-gateway.json";
+        write_private_json(file, Json{{"schema", 1}, {"services", Json::array()}});
+        auto pinned = passion();
+        pinned["someip_gateway"] = {{"file", file.string()}, {"sha256", sha256_file(file)}};
+        assert(qnx_someip_gateway(pinned)->at("schema") == 1);
+        auto changed = pinned;
+        changed["someip_gateway"]["sha256"] = std::string(64, '0');
+        rejects([&] {
+            qnx_someip_gateway(changed);
+        });
+        auto alone = pinned;
+        alone.erase("interguest_network");
+        rejects([&] {
+            qnx_someip_gateway(alone);
+        });
+        auto relative = pinned;
+        relative["someip_gateway"]["file"] = file.filename().string();
+        rejects([&] {
+            qnx_someip_gateway(relative);
+        });
+        std::filesystem::remove_all(directory);
     }
     const auto spec = passion();
     const auto binding = qnx_interguest_binding(spec);

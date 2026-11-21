@@ -423,6 +423,8 @@ private:
     Json cluster_boot_spec_;
     std::unique_ptr<InterguestLink> interguest_link_;
     std::uint64_t interguest_qnx_generation_ = 0;
+    // Vehicle state sequence last given to the gateway; 0 when none is attached or fed yet.
+    std::uint64_t someip_sequence_ = 0;
     bool qnx_checkpoint_disabled_ = false, qnx_checkpoint_ready_ = false;
     std::set<std::string> startup_markers_;
     QnxSerialLines qnx_serial_;

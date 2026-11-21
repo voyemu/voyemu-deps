@@ -2,6 +2,7 @@
 #ifdef NDEBUG
 #undef NDEBUG
 #endif
+#include <algorithm>
 #include <cassert>
 #include <exception>
 #include <filesystem>
@@ -29,8 +30,13 @@ int main() try {
                                scoped_profile = "test-qinggan11-scoped";
     const auto passion = qnx_runtime_layout("sa8155-passion-21480");
 
-    assert(passion.memory_mib == 11713 && passion.images.size() == 14 &&
+    assert(passion.memory_mib == 11713 && passion.images.size() == 15 &&
            passion.loaders.size() == 16 && passion.projection.is_null() && passion.profile.empty());
+    // The vehicle gateway contract is a pinned machine part, never loaded into guest memory.
+    assert(passion.images.back() == "someip-gateway.json" &&
+           std::none_of(passion.loaders.begin(), passion.loaders.end(), [](const auto &loader) {
+               return loader.first == "someip-gateway.json";
+           }));
     const auto profiles = std::filesystem::path(__FILE__)
                                   .parent_path()
                                   .parent_path()

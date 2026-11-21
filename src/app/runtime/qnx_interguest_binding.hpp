@@ -1,7 +1,9 @@
 #pragma once
 #include "error.hpp"
 #include "interguest_link.hpp"
+#include "process.hpp"
 #include "qnx_interguest_contract.hpp"
+#include <optional>
 #include <string_view>
 namespace voyemu {
 struct QnxInterguestBinding {
@@ -111,6 +113,31 @@ inline QnxInterguestBinding qnx_interguest_binding(const Json &runtime) {
 
     return qnx_passion_ram_binding(runtime, runtime.value("hardware_adapter", std::string{}) ==
                                                     "sa8155-passion-21480");
+}
+
+// The vehicle gateway contract a cluster launch pins (someip_gateway: file and sha256), or none.
+inline std::optional<Json> qnx_someip_gateway(const Json &runtime) {
+    if (!runtime.contains("someip_gateway")) {
+        return std::nullopt;
+    }
+
+    const auto &entry = runtime.at("someip_gateway");
+
+    if (!entry.is_object() || entry.size() != 2 || !entry.contains("file") ||
+        !entry.at("file").is_string() || !entry.contains("sha256") ||
+        !entry.at("sha256").is_string() || !runtime.contains("interguest_network")) {
+        throw VoyemuError("SOMEIP_GATEWAY_PIN", "file and sha256 beside the interguest network");
+    }
+
+    const std::filesystem::path file = entry.at("file").get<std::string>();
+
+    if (!file.is_absolute() || !std::filesystem::is_regular_file(file) ||
+        std::filesystem::file_size(file) > 4 * 1024 * 1024 ||
+        sha256_file(file) != entry.at("sha256").get<std::string>()) {
+        throw VoyemuError("SOMEIP_GATEWAY_PIN", "pinned gateway contract differs");
+    }
+
+    return read_private_json(file, 4 * 1024 * 1024);
 }
 
 inline QnxInterguestBinding qnx_ram_binding(const Json &runtime) {

@@ -968,7 +968,7 @@ Json prepare_qnx_passion_developer_images(const std::filesystem::path &root,
     const auto placement = qnx_passion_11713_placement();
     need(std::filesystem::create_directory(output), "QNX_PASSION_DEVELOPER_CREATE");
     ensure_private_directory(output);
-    write_private_json(output / "someip-gateway.json", gateway);
+    write_private_json(output / "someip-gateway.json", gateway, 4 * 1024 * 1024);
     const auto guest = build_qnx_guest_modules(
             root, read_qnx_imagefs_file(host, "lib64/libc.so.4"),
             read_qnx_imagefs_file(display, "lib64/libscreen.so.1"), output / "guest", true,
@@ -1136,7 +1136,7 @@ Json prepare_qnx_passion_developer_images(const std::filesystem::path &root,
     for (const auto *name :
          {"hyp-hvf.img", "host-native-lzo.bin", "ifs2-native.img", "smem.bin", "early-l2.bin",
           "config-data-blank.bin", "synthetic-gpt.bin", "gpt-primary.bin", "gpt-backup.bin",
-          "qnx-ipl-virt.bin", "qnx-ifs2-restore.bin"}) {
+          "qnx-ipl-virt.bin", "qnx-ifs2-restore.bin", "someip-gateway.json"}) {
         images[name] = {{"sha256", sha256_file(output / name)},
                         {"bytes", std::filesystem::file_size(output / name)}};
     }
@@ -1184,7 +1184,6 @@ Json prepare_qnx_passion_developer_images(const std::filesystem::path &root,
             {"memory_mib", 11713},
             {"runtime_sha256", sha256_bytes(runtime)},
             {"network_script_sha256", sha256_bytes(network)},
-            {"someip_gateway_sha256", sha256_file(output / "someip-gateway.json")},
             {"source_capture", 1},
             {"logical_ifs_bytes", ifs.size()},
             {"gpt_block_bytes", 4096},

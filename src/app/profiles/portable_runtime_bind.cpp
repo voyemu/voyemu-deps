@@ -1556,6 +1556,17 @@ std::filesystem::path bind_machine_configuration(const std::filesystem::path &ro
                         {"owner_local_oem_inputs", true}};
                 qnx_runtime_launch_metadata(cluster_launch, layout);
 
+                // The prepared vehicle gateway contract of the Passion cluster, pinned like the
+                // images it sits beside.
+                if (images.contains("someip-gateway.json")) {
+                    cluster_launch["someip_gateway"] = {
+                            {"file", images.at("someip-gateway.json").string()},
+                            {"sha256", qnx.at("images")
+                                               .at("someip-gateway.json")
+                                               .at("sha256")
+                                               .get<std::string>()}};
+                }
+
                 if (!desired_qnx_storage.empty()) {
                     cluster_launch["persistent_storage"] = desired_qnx_storage;
                 }
