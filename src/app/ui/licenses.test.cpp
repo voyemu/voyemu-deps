@@ -12,7 +12,7 @@ int main() try {
     const auto entries = embedded_license_notices();
     assert(entries.size() >= 6);
     assert(entries[0].component == "Voyemu");
-    bool font = false, json = false, imgui = false;
+    bool json = false, imgui = false;
 
     for (const auto &entry : entries) {
         assert(!entry.component.empty() && !entry.authors.empty() && !entry.license.empty() &&
@@ -30,29 +30,26 @@ int main() try {
         assert(license_document(entry) == entry.text);
         assert(entry.text.find('\r') == std::string_view::npos);
         assert(entry.component != "QEMU" && entry.component != "JDK" && entry.component != "LZO");
-        font |= entry.component == "Inter";
         json |= entry.component == "nlohmann/json";
         imgui |= entry.component == "Dear ImGui";
     }
 
-    assert(font && json && imgui);
-    assert(entries[5].component == "lzokay" && entries[6].component == "miniz");
+    assert(json && imgui);
+    assert(entries[4].component == "lzokay" && entries[5].component == "miniz");
     assert(license_site(entries[0], Language::russian) == "https://voyemu.ru");
     assert(license_site(entries[0], Language::english) == "https://voyemu.com");
     assert(license_site(entries[0], Language::chinese) == "https://voyemu.com");
 #ifdef __APPLE__
-    assert(entries.size() == 12);
-    assert(entries[7].component == "libarchive" && entries[8].component == "nghttp2" &&
-           entries[9].component == "Android Debug Bridge (AOSP)" &&
-           entries[10].component == "SDL3" && entries[11].component == "Noto Sans SC");
+    assert(entries.size() == 10);
+    assert(entries[6].component == "libarchive" && entries[7].component == "nghttp2" &&
+           entries[8].component == "Android Debug Bridge (AOSP)" && entries[9].component == "SDL3");
 #else
-    assert(entries.size() == 12);
-    assert(entries[7].component == "curl" && entries[8].component == "nghttp2" &&
-           entries[9].component == "Android Debug Bridge (AOSP)" &&
-           entries[10].component == "SDL3" && entries[11].component == "Noto Sans SC");
+    assert(entries.size() == 10);
+    assert(entries[6].component == "curl" && entries[7].component == "nghttp2" &&
+           entries[8].component == "Android Debug Bridge (AOSP)" && entries[9].component == "SDL3");
 #endif
     // SDL3 carries the notices of the third-party code it compiles into the static library.
-    const auto &sdl = entries[10].text;
+    const auto &sdl = entries[9].text;
 
     for (const auto *author : {"Sam Lantinga", "Adrien Descamps", "Sun Microsystems",
                                "Gareth McCaughan", "Andreas Schiffler", "Valve Corporation"}) {

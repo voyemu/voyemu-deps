@@ -51,6 +51,8 @@ int main(int argc, char **argv) try {
                                   (session / "endpoint").string(),
                                   "--assets",
                                   (base / "assets").string(),
+                                  "--fonts",
+                                  (base / "fonts").string(),
                                   "--profile",
                                   "fixture",
                                   "--with-cluster",
@@ -187,7 +189,7 @@ int main(int argc, char **argv) try {
     assert(!media_view_options(int(multimedia_values.size()), multimedia_values.data())
                     .with_cluster);
 
-    for (const auto *flag : {"--assets", "--endpoint"}) {
+    for (const auto *flag : {"--assets", "--fonts", "--endpoint"}) {
         auto missing = multimedia_args;
         const auto at = std::find(missing.begin(), missing.end(), flag);
         missing.erase(at, at + 2);

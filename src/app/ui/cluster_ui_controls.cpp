@@ -1659,8 +1659,9 @@ void Window::about() {
     }
 
     // The title has the em of the host title bar font; an ImGui size is the ascent to descent
-    // height, 2478 of the 2048 em units of Inter.
-    const float title_size = title_font_size_ ? *title_font_size_ * 2478 / 2048 : f;
+    // height of the face.
+    const float title_size =
+            title_font_size_ ? *title_font_size_ * ui_font_height_per_em(UiFontRole::Emphasis) : f;
     ImGui::PushFont(ui_text_font(UiFontRole::Emphasis), title_size);
     draw->AddText(ImVec2(origin.x + padding, origin.y + (title - title_size) / 2),
                   control_ink(title_ink), tr("О программе"));
@@ -2034,9 +2035,7 @@ void Window::draw(Texture frame, Texture left, Texture right, unsigned screen_sc
 
         const float digits = font->CalcTextSizeA(numeric_font_size_, FLT_MAX, 0, "4294967295").x,
                     raw_area = layout.raw_input_width() - layout.input_padding();
-        inspection_["font"] = {{"sha256", ui_font_sha256},
-                               {"static_weight", 400},
-                               {"name", font->GetDebugName()},
+        inspection_["font"] = {{"name", font->GetDebugName()},
                                {"size_points", ImGui::GetFontSize()},
                                {"input_size_points", numeric_font_size_},
                                {"label_size_points", label_font_size_},

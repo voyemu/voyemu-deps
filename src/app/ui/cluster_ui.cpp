@@ -136,7 +136,7 @@ Options parse_options(int argc, const char *const *argv) {
     for (int i = 1; i < argc; ++i) {
         const std::string flag = argv[i];
 
-        if (flag != "--endpoint" && flag != "--frame" && flag != "--assets" &&
+        if (flag != "--endpoint" && flag != "--frame" && flag != "--assets" && flag != "--fonts" &&
             flag != "--replay-frame" && flag != "--smoke-seconds" && flag != "--capture-ui" &&
             flag != "--profile" && flag != "--inspect-panel" && flag != "--appearance") {
             throw VoyemuError("CLUSTER_UI", "Unknown cluster option: " + flag);
@@ -160,6 +160,10 @@ Options parse_options(int argc, const char *const *argv) {
 
         if (flag == "--assets") {
             options.assets = path;
+        }
+
+        if (flag == "--fonts") {
+            options.fonts = path;
         }
 
         if (flag == "--replay-frame") {
@@ -218,11 +222,12 @@ Options parse_options(int argc, const char *const *argv) {
         }
     }
 
-    if (options.assets.empty() || (options.endpoint.empty() && options.replay_frame.empty()) ||
+    if (options.assets.empty() || options.fonts.empty() ||
+        (options.endpoint.empty() && options.replay_frame.empty()) ||
         (options.frame.empty() && options.replay_frame.empty())) {
         throw VoyemuError(
                 "CLUSTER_UI",
-                "voyemu-cluster requires --endpoint PATH --frame PATH --assets PATH; explicit --replay-frame BMP permits developer frame inspection");
+                "voyemu-cluster requires --endpoint PATH --frame PATH --assets PATH --fonts PATH; explicit --replay-frame BMP permits developer frame inspection");
     }
 
     if (!options.replay_frame.empty() && !options.frame.empty()) {

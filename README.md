@@ -49,6 +49,6 @@ Run the commands from the installation root, see [release](https://github.com/vo
 - [Build](https://github.com/voyemu/voyemu/blob/main/docs/dev/build.md), [tests](https://github.com/voyemu/voyemu/blob/main/docs/dev/tests.md) and [CI](https://github.com/voyemu/voyemu/blob/main/docs/dev/ci.md): building and checking Voyemu from source.
 - [All documentation](https://github.com/voyemu/voyemu/blob/main/docs/index.md).
 
-Voyemu code is covered by [MIT](LICENSE). Inter uses the [SIL Open Font License](profiles/common/fonts/Inter-OFL.txt). Third-party code and tools retain their own licenses; see [third-party notices](https://github.com/voyemu/voyemu/blob/main/src/licenses/README.md).
+Voyemu code is covered by [MIT](LICENSE). Third-party code and tools retain their own licenses; see [third-party notices](https://github.com/voyemu/voyemu/blob/main/src/licenses/README.md).
 
 OEM firmware files and derived vehicle images are excluded from public source code. Recipes with a `guard` and checked binary offsets describe adaptations; OEM artwork is extracted into the prepared machine. The project license does not grant permission to redistribute OEM materials. Voyemu is not affiliated with the vehicle manufacturer.

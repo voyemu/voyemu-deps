@@ -188,22 +188,6 @@
           "upstream_file": "COPYING"
         }
       ]
-    },
-    {
-      "name": "noto_sans_sc",
-      "version": "google/fonts a85815a42757630ce188fdad368c2dfc444d4773",
-      "url": "https://raw.githubusercontent.com/google/fonts/a85815a42757630ce188fdad368c2dfc444d4773/ofl/notosanssc/NotoSansSC%5Bwght%5D.ttf",
-      "archive_sha256": "a3041811a78c361b1de50f953c805e0244951c21c5bd412f7232ef0d899af0da",
-      "license": "OFL-1.1",
-      "provenance": "The Noto Sans SC TrueType font of Google Fonts, the latest commit of its directory, dated 2026-03-25",
-      "scope": "Glyphs of the Chinese UI strings at the weights 400 and 500, subset at configure by src/dev/fonts/FontSubset.java",
-      "files": [
-        {
-          "file": "NotoSansSC-VF.ttf",
-          "bytes": 17772300,
-          "sha256": "a3041811a78c361b1de50f953c805e0244951c21c5bd412f7232ef0d899af0da"
-        }
-      ]
     }
   ]
 }

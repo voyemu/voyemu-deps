@@ -19,64 +19,67 @@ void check(bool condition, const char *message) {
     }
 }
 
+// A copy of the fixture directory without one face, or with one face unreadable.
+std::filesystem::path broken_directory(const std::filesystem::path &fonts, const char *face,
+                                       bool remove) {
+    const auto scratch =
+            fonts.parent_path().parent_path().parent_path().parent_path().parent_path() /
+            ".local/build/tmp" /
+            (".voyemu-fonts-" +
+             std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+
+    std::filesystem::create_directories(scratch);
+
+    for (const auto &entry : std::filesystem::directory_iterator(fonts)) {
+        std::filesystem::copy_file(entry.path(), scratch / entry.path().filename());
+    }
+
+    if (remove) {
+        std::filesystem::remove(scratch / face);
+    } else {
+        std::ofstream(scratch / face, std::ios::binary | std::ios::trunc) << "not a font";
+    }
+
+    return scratch;
+}
+
 void font_guards(const std::filesystem::path &path) {
     ImGui::CreateContext();
     ImGui::GetIO().IniFilename = nullptr;
-    load_embedded_ui_font();
-    check(ImGui::GetIO().Fonts->Fonts.Size == 3,
-          "embedded fonts load without paths or sibling resource files");
-    ImGui::DestroyContext();
-    ImGui::CreateContext();
-    ImGui::GetIO().IniFilename = nullptr;
     try {
-        bool rejected = false;
-        try {
-            load_ui_font(path.string() + ".missing");
-        } catch (...) {
-            rejected = true;
+        for (const auto *face : {"latin-regular.ttf", "cjk-bold.ttf"}) {
+            for (const bool remove : {true, false}) {
+                const auto broken = broken_directory(path, face, remove);
+                std::string message;
+
+                try {
+                    load_ui_fonts(broken);
+                } catch (const std::exception &error) {
+                    message = error.what();
+                }
+
+                std::filesystem::remove_all(broken);
+                check(message.starts_with("UI_FONT: ") && message.find(face) != std::string::npos &&
+                              message.find("rebuild the machine") != std::string::npos,
+                      "a missing or unreadable machine font asks for a rebuilt machine");
+                ImGui::DestroyContext();
+                ImGui::CreateContext();
+                ImGui::GetIO().IniFilename = nullptr;
+            }
         }
 
-        check(rejected, "missing native resource cannot silently fall back to an unreadable font");
-        std::ifstream input(path, std::ios::binary);
-        std::string bytes((std::istreambuf_iterator<char>(input)), {});
-        check(!bytes.empty() && bytes.size() < 512 * 1024,
-              "font fixture has a finite static resource bound");
-        bytes[0] ^= 1;
-        const auto scratch = path.parent_path().parent_path().parent_path().parent_path() /
-                             ".local/build/tmp";
-        std::filesystem::create_directories(scratch);
-        const auto temporary =
-                scratch /
-                (".voyemu-font-" +
-                 std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) +
-                 ".ttf");
-        {
-            std::ofstream output(temporary, std::ios::binary);
-            output.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
-            check(bool(output), "temporary tampered fixture can be written");
-        }
-        rejected = false;
-        try {
-            load_ui_font(temporary);
-        } catch (...) {
-            rejected = true;
-        }
-
-        std::filesystem::remove(temporary);
-        check(rejected, "changed default Regular resource cannot bypass its independent SHA guard");
-        load_ui_font(path);
+        load_ui_fonts(path);
         auto &io = ImGui::GetIO();
         io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
         io.DisplaySize = ImVec2(1294, 360);
         io.DeltaTime = 1.f / 60;
         ImGui::GetStyle().FontSizeBase = 13;
-        check(std::string(io.FontDefault->GetDebugName()) == "Inter Regular",
-              "official Regular remains the default field font");
+        check(std::string(io.FontDefault->GetDebugName()) == "Regular",
+              "Regular remains the default field font");
         ImGui::NewFrame();
         ImGui::Begin("font metric guards");
-        check(io.Fonts->Fonts.Size == 3, "native shells load exactly three bounded Inter faces");
-        check(std::string(tab_font()->GetDebugName()) == "Inter Medium",
-              "tabs use Medium500 without synthetic or Bold700 inflation");
+        check(io.Fonts->Fonts.Size == 3, "the window loads the three weights of the machine");
+        check(std::string(tab_font()->GetDebugName()) == "Medium", "tabs use the Medium face");
         check(ui_text_font(UiFontRole::Body) == io.FontDefault,
               "body role is the default official Regular face");
         check(ui_text_font(UiFontRole::Label) == io.FontDefault,
@@ -84,7 +87,7 @@ void font_guards(const std::filesystem::path &path) {
         check(ui_text_font(UiFontRole::Emphasis) == tab_font() && tab_font() != io.FontDefault,
               "tabs and group headings share Medium500 above Regular400 body");
         // Chinese captions sit beside Latin ones with a comparable stroke: the ink of 中 and 文 is
-        // close to that of E and N in Regular, and heavier in Medium.
+        // close to that of E and N in Regular.
         const auto ink = [&](ImFont *font, const char *text) {
             float total = 0;
 
@@ -113,19 +116,11 @@ void font_guards(const std::filesystem::path &path) {
         const float latin = ink(io.FontDefault, "EN"), chinese = ink(io.FontDefault, "中文");
         check(chinese > .8f * latin && chinese < 1.4f * latin,
               "Regular Chinese captions have the stroke weight of Regular Latin captions");
-        check(ink(tab_font(), "中文") > 1.1f * chinese,
-              "Medium Chinese captions are heavier than Regular ones");
-        check(std::string(ui_text_font(UiFontRole::Choice)->GetDebugName()) == "Inter Bold" &&
-                      ink(ui_text_font(UiFontRole::Choice), "EN") > 1.15f * latin &&
-                      ink(ui_text_font(UiFontRole::Choice), "中文") > ink(tab_font(), "中文"),
-              "choice captions use Inter Bold with heavier Chinese glyphs than Medium");
-#ifdef __APPLE__
-        for (const ImWchar c : {0x901f, 0x5ea6, 0x8f66, 0x8eab, 0x706f, 0x5149, 0x8f6e, 0x80ce}) {
-            check(io.FontDefault->IsGlyphInFont(c) &&
-                          ui_text_font(UiFontRole::Label)->IsGlyphInFont(c) &&
-                          ui_text_font(UiFontRole::Emphasis)->IsGlyphInFont(c),
-                  "system fallback covers Chinese UI in both faces");
-        }
+        check(std::string(ui_text_font(UiFontRole::Choice)->GetDebugName()) == "Bold" &&
+                      ink(ui_text_font(UiFontRole::Choice), "EN") > 1.15f * latin,
+              "choice captions use the Bold face");
+        check(std::abs(ui_font_height_per_em(UiFontRole::Body) - 2478.f / 2048) < .001f,
+              "the size of a face follows its own ascent to descent height per em");
 
         for (const auto &entry : voyemu::ui::catalogue) {
             const char *text = entry.chinese;
@@ -143,7 +138,7 @@ void font_guards(const std::filesystem::path &path) {
                       "every Chinese catalogue glyph exists in both UI faces");
             }
         }
-#endif
+
         check(ImGui::CalcTextSize("4294967295").x <= ParametersLayout::raw_value_width - 20,
               "all ten digits of a raw uint32 maximum fit inside the numeric field padding");
 
@@ -212,7 +207,7 @@ void font_guards(const std::filesystem::path &path) {
 int main(int argc, char **argv) {
     try {
         if (argc != 2) {
-            throw std::runtime_error("font test requires the approved static font path");
+            throw std::runtime_error("font test requires the fixture font directory");
         }
 
         font_guards(argv[1]);

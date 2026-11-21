@@ -33,7 +33,7 @@ inline constexpr float editor_height = 0.0f;
 inline constexpr float photo_width = wheel_photo_width;
 inline constexpr float photo_height = wheel_photo_height;
 struct Options {
-    std::filesystem::path endpoint, frame, assets, replay_frame, capture_ui;
+    std::filesystem::path endpoint, frame, assets, fonts, replay_frame, capture_ui;
     double smoke_seconds{};
     std::string profile;
     std::optional<std::size_t> inspect_panel;

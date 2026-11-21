@@ -36,6 +36,9 @@ std::vector<std::uint8_t> decode_photo_rgba(const std::filesystem::path &path) {
 using namespace voyemu;
 using namespace voyemu::cluster;
 namespace {
+// The fixture font directory that stands for the fonts of a machine.
+std::filesystem::path fonts_directory;
+
 void check(bool condition, const char *message) {
     if (!condition) {
         throw std::runtime_error(message);
@@ -412,58 +415,70 @@ void parsing() {
     check(!parse_number("1e309"), "double overflow must reject");
     check(!parse_number("1e"), "incomplete exponent must stay local");
     check(!parse_number(""), "empty semantic draft must stay local");
-    const char *valid[] = {"voyemu-cluster", "--endpoint", "socket", "--frame",
-                           "frame.bgra",     "--assets",   "assets"};
-    auto options = parse_options(7, valid);
+    const char *valid[] = {"voyemu-cluster", "--endpoint", "socket",  "--frame", "frame.bgra",
+                           "--assets",       "assets",     "--fonts", "fonts"};
+    auto options = parse_options(9, valid);
     check(options.frame == "frame.bgra", "live frame option");
     check(window_title(options) == "Voyemu", "standard title without a profile title");
-    const char *profiled[] = {"voyemu-cluster", "--endpoint", "socket",    "--frame", "frame.bgra",
-                              "--assets",       "assets",     "--profile", "Test 1.0"};
-    const auto named = parse_options(9, profiled);
+    const char *profiled[] = {"voyemu-cluster", "--endpoint", "socket", "--frame",
+                              "frame.bgra",     "--assets",   "assets", "--profile",
+                              "Test 1.0",       "--fonts",    "fonts"};
+    const auto named = parse_options(11, profiled);
     check(window_title(named) == "Voyemu Test 1.0", "title names the profile by its title");
     check(screens_window_title(named, "HUD") == "Voyemu Test 1.0 - HUD",
           "screens window title adds its caption");
-    const char *invalid_profile[] = {"voyemu-cluster", "--endpoint", "socket",
-                                     "--frame",        "frame.bgra", "--assets",
-                                     "assets",         "--profile",  "Test\n1.0"};
+    const char *invalid_profile[] = {"voyemu-cluster", "--endpoint", "socket", "--frame",
+                                     "frame.bgra",     "--assets",   "assets", "--profile",
+                                     "Test\n1.0",      "--fonts",    "fonts"};
     bool profile_rejected = false;
     try {
-        parse_options(9, invalid_profile);
+        parse_options(11, invalid_profile);
     } catch (...) {
         profile_rejected = true;
     }
 
     check(profile_rejected, "profile title with a control character must reject");
-    const char *incomplete[] = {"voyemu-cluster", "--assets", "assets"};
+    const char *incomplete[] = {"voyemu-cluster", "--assets", "assets", "--fonts", "fonts"};
     bool rejected = false;
     try {
-        parse_options(3, incomplete);
+        parse_options(5, incomplete);
     } catch (...) {
         rejected = true;
     }
 
     check(rejected, "normal GUI requires actual live session/frame");
-    const char *replay[] = {"voyemu-cluster", "--replay-frame", "original.bmp",
-                            "--assets",       "assets",         "--smoke-seconds",
-                            "0.25",           "--capture-ui",   "capture.png"};
-    check(parse_options(9, replay).smoke_seconds == .25, "explicit bounded replay smoke");
-    check(!parse_options(9, replay).light_theme, "replay defaults to the dark theme");
+    const char *without_fonts[] = {"voyemu-cluster", "--endpoint", "socket", "--frame",
+                                   "frame.bgra",     "--assets",   "assets"};
+    rejected = false;
+    try {
+        parse_options(7, without_fonts);
+    } catch (...) {
+        rejected = true;
+    }
+
+    check(rejected, "the window requires the fonts of a machine");
+    const char *replay[] = {"voyemu-cluster", "--replay-frame",  "original.bmp", "--assets",
+                            "assets",         "--smoke-seconds", "0.25",         "--capture-ui",
+                            "capture.png",    "--fonts",         "fonts"};
+    check(parse_options(11, replay).smoke_seconds == .25, "explicit bounded replay smoke");
+    check(!parse_options(11, replay).light_theme, "replay defaults to the dark theme");
 
     for (const bool light : {false, true}) {
         const char *themed[] = {
-                "voyemu-cluster", "--replay-frame", "original.bmp",          "--assets",
-                "assets",         "--appearance",   light ? "light" : "dark"};
-        check(parse_options(7, themed).light_theme == light,
+                "voyemu-cluster", "--replay-frame",         "original.bmp", "--assets", "assets",
+                "--appearance",   light ? "light" : "dark", "--fonts",      "fonts"};
+        check(parse_options(9, themed).light_theme == light,
               "replay selects the requested appearance");
     }
 
-    const char *blue[] = {"voyemu-cluster", "--replay-frame", "original.bmp", "--assets",
-                          "assets",         "--appearance",   "blue"};
-    const char *live[] = {"voyemu-cluster", "--endpoint", "endpoint",     "--frame", "frame.bgra",
-                          "--assets",       "assets",     "--appearance", "light"};
+    const char *blue[] = {"voyemu-cluster", "--replay-frame", "original.bmp", "--assets", "assets",
+                          "--appearance",   "blue",           "--fonts",      "fonts"};
+    const char *live[] = {"voyemu-cluster", "--endpoint", "endpoint", "--frame",
+                          "frame.bgra",     "--assets",   "assets",   "--appearance",
+                          "light",          "--fonts",    "fonts"};
 
-    for (const auto &[count, arguments] : {std::pair<int, const char *const *>{7, blue},
-                                           std::pair<int, const char *const *>{9, live}}) {
+    for (const auto &[count, arguments] : {std::pair<int, const char *const *>{9, blue},
+                                           std::pair<int, const char *const *>{11, live}}) {
         rejected = false;
         try {
             parse_options(count, arguments);
@@ -481,12 +496,13 @@ void parsing() {
         const char *inspected[] = {
                 "voyemu-cluster", "--replay-frame",  "original.bmp", "--assets",
                 "assets",         "--smoke-seconds", "0.25",         "--capture-ui",
-                "capture.png",    "--inspect-panel", panels[i]};
-        check(parse_options(11, inspected).inspect_panel == i,
+                "capture.png",    "--inspect-panel", panels[i],      "--fonts",
+                "fonts"};
+        check(parse_options(13, inspected).inspect_panel == i,
               "bounded own capture accepts every named panel");
         const auto number = std::to_string(i);
         inspected[10] = number.c_str();
-        check(parse_options(11, inspected).inspect_panel == i,
+        check(parse_options(13, inspected).inspect_panel == i,
               "bounded own capture accepts every numeric panel");
     }
 
@@ -501,10 +517,12 @@ void parsing() {
                                    "--capture-ui",
                                    "capture.png",
                                    "--inspect-panel",
-                                   bad};
+                                   bad,
+                                   "--fonts",
+                                   "fonts"};
         rejected = false;
         try {
-            parse_options(11, inspected);
+            parse_options(13, inspected);
         } catch (...) {
             rejected = true;
         }
@@ -518,10 +536,12 @@ void parsing() {
                                "--assets",
                                "assets",
                                "--inspect-panel",
-                               "0"};
+                               "0",
+                               "--fonts",
+                               "fonts"};
     rejected = false;
     try {
-        parse_options(7, unbounded);
+        parse_options(9, unbounded);
     } catch (...) {
         rejected = true;
     }
@@ -539,19 +559,22 @@ void parsing() {
                                "--inspect-panel",
                                "0",
                                "--inspect-panel",
-                               "raw"};
+                               "raw",
+                               "--fonts",
+                               "fonts"};
     rejected = false;
     try {
-        parse_options(13, duplicate);
+        parse_options(15, duplicate);
     } catch (...) {
         rejected = true;
     }
 
     check(rejected, "duplicate inspection flag rejects");
-    const char *dual[] = {"voyemu-cluster", "--frame", "f", "--replay-frame", "r", "--assets", "a"};
+    const char *dual[] = {"voyemu-cluster", "--frame", "f",       "--replay-frame", "r",
+                          "--assets",       "a",       "--fonts", "fonts"};
     rejected = false;
     try {
-        parse_options(7, dual);
+        parse_options(9, dual);
     } catch (...) {
         rejected = true;
     }
@@ -2992,7 +3015,7 @@ void unavailable_toggle(const std::filesystem::path &assets) {
         io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
         io.DeltaTime = 1.f / 60;
         io.ConfigInputTrickleEventQueue = false;
-        load_ui_font(assets.parent_path().parent_path() / "fonts/Inter-Regular.ttf");
+        load_ui_fonts(fonts_directory);
         const auto geometry = view_layout(canonical_ui_scale);
         io.DisplaySize = ImVec2(geometry.canvas_width, geometry.canvas_height);
         io.DisplayFramebufferScale = ImVec2(1920.f / canonical_ui_width,
@@ -3140,7 +3163,7 @@ void editor_sections_fill_available_height(const std::filesystem::path &assets,
         io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
         io.DeltaTime = 1.f / 60;
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-        load_ui_font(assets.parent_path().parent_path() / "fonts/Inter-Regular.ttf");
+        load_ui_fonts(fonts_directory);
         check(ui_text_font(UiFontRole::Body) == ui_text_font(UiFontRole::Label) &&
                       ui_text_font(UiFontRole::Body) != ui_text_font(UiFontRole::Emphasis),
               "production UI uses the requested Regular body/label and Medium tab/group roles");
@@ -3355,7 +3378,7 @@ void editor_sections_fill_available_height(const std::filesystem::path &assets,
                     const float guest_scale = scale == canonical_ui_scale ? .5f : scale / 100.f;
                     check(std::abs(reference.at("sample_ink_pixels").get<float>() -
                                    (27 * guest_scale + (layout.compact50() ? 2 : 0))) <= 1.1f,
-                          "actual Inter Medium baked BT Music ink matches the measured OEM pixel height");
+                          "actual Medium baked BT Music ink matches the measured OEM pixel height");
                     check(std::abs(line[2] * density - 42 * guest_scale) < .001f &&
                                   std::abs(line[3] * density - 6 * guest_scale) < .001f,
                           "underline physical size follows the measured42x6OEM artwork");
@@ -4566,7 +4589,7 @@ void radio_transition_colors(const std::filesystem::path &assets,
         io.DisplaySize = ImVec2(geometry.canvas_width, geometry.canvas_height);
         const float density = scale == canonical_ui_scale ? 1920.f / canonical_ui_width : 2.f;
         io.DisplayFramebufferScale = ImVec2(density, density);
-        load_ui_font(assets.parent_path().parent_path() / "fonts/Inter-Regular.ttf");
+        load_ui_fonts(fonts_directory);
         std::mutex mutex;
         std::string scheme = "dark";
         auto canonical = apply_patch(initial_state(VehicleCatalog::qinggan09),
@@ -5136,7 +5159,7 @@ void profile_limited_controls(const std::filesystem::path &assets) {
         io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
         io.DeltaTime = 1.f / 60;
         io.ConfigInputTrickleEventQueue = false;
-        load_ui_font(assets.parent_path().parent_path() / "fonts/Inter-Regular.ttf");
+        load_ui_fonts(fonts_directory);
         const auto geometry = view_layout(canonical_ui_scale);
         io.DisplaySize = ImVec2(geometry.canvas_width, geometry.canvas_height);
         io.DisplayFramebufferScale = ImVec2(1920.f / canonical_ui_width,
@@ -5287,9 +5310,11 @@ int main(int argc, char **argv) {
         parameter_layout_guards();
         input_transform_guards();
 
-        if (argc != 2) {
-            throw std::runtime_error("test requires approved assets path");
+        if (argc != 3) {
+            throw std::runtime_error("test requires approved assets and fixture font paths");
         }
+
+        fonts_directory = argv[2];
 
         regions(argv[1]);
         profile_wheel_layout(argv[1]);

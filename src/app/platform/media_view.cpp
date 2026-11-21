@@ -89,6 +89,8 @@ MediaViewOptions media_view_options(int argc, const char *const *argv) {
             options.endpoint = value();
         } else if (name == "--assets") {
             options.assets = value();
+        } else if (name == "--fonts") {
+            options.fonts = value();
         } else if (name == "--profile") {
             options.profile = value();
         } else if (name == "--seconds") {
@@ -141,8 +143,9 @@ MediaViewOptions media_view_options(int argc, const char *const *argv) {
         throw VoyemuError("MEDIA_ARGUMENT", "explicit private paths and owned epoch required");
     }
 
-    if (!options.endpoint.is_absolute() || !options.assets.is_absolute()) {
-        throw VoyemuError("WINDOW_CLUSTER", "explicit owned endpoint and assets required");
+    if (!options.endpoint.is_absolute() || !options.assets.is_absolute() ||
+        !options.fonts.is_absolute()) {
+        throw VoyemuError("WINDOW_CLUSTER", "explicit owned endpoint, assets and fonts required");
     }
 
     if ((options.keyboard_smoke || options.inspect_panel || options.inspect_language) &&

@@ -18,6 +18,10 @@ When the firmware has OEM startup videos, all of them start together each time t
 
 The steering wheel is drawn from the artwork of the profile, copied into the machine's `ui/wheel/`. Its buttons send the OEM steering-wheel events to the guests: media, volume, voice assistant and the other buttons of the vehicle line. The routes of the buttons come from the machine's `ui/wheel-routes.json`.
 
+## Fonts
+
+The window draws its text with the fonts of the vehicle and embeds none of its own. Latin and Cyrillic come from the Latin font of the firmware, Roboto or Noto Sans, and Chinese from its Chinese font, DFP King Gothic GB or Noto Sans CJK SC, at three weights: regular, medium and bold. A firmware without a medium weight uses its semibold or bold one. `build` copies the fonts that the [profile](profiles-machines.md#profile) declares into the machine's `ui/fonts/`. The Russian letters of DFP King Gothic GB Regular and Semibold advance a full em in the firmware, which spaces Russian text out; `build` writes these two fonts with the advances of the Russian letters reduced to their glyphs. A machine without these fonts stops the window with an error asking to rebuild the machine.
+
 ## Controls next to the wheel
 
 Controls next to the wheel replace a menu:

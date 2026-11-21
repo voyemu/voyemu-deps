@@ -62,7 +62,9 @@ void Session::attach_frontend(const Json &input, bool cluster_panel, bool backgr
             "--state",
             specification.at("state").get<std::string>(),
             "--assets",
-            specification.at("assets").get<std::string>()};
+            specification.at("assets").get<std::string>(),
+            "--fonts",
+            specification.at("fonts").get<std::string>()};
 
     if (specification.contains("startup")) {
         const auto &startup = specification.at("startup");

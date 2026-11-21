@@ -12,6 +12,8 @@
 namespace voyemu::media {
 struct MediaViewOptions {
     std::filesystem::path session, splash, state, endpoint, assets;
+    // The car fonts of the machine, ui/fonts of its resources.
+    std::filesystem::path fonts;
     // OEM boot animation per screen until Android is ready: a bootanimation.zip, an empty path for
     // black, or none for the Voyemu logo.
     std::array<std::optional<std::filesystem::path>, 2> startup;

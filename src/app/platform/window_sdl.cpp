@@ -239,6 +239,7 @@ public:
             options_.endpoint = media_options_->endpoint;
             options_.frame = media_options_->session / "frame.bgra";
             options_.assets = media_options_->assets;
+            options_.fonts = media_options_->fonts;
             options_.profile = media_options_->profile;
             options_.smoke_seconds = media_options_->seconds;
             options_.inspect_panel = media_options_->inspect_panel;
@@ -1684,7 +1685,7 @@ int App::run() {
     style.WindowRounding = 0;
     style.FrameRounding = 4;
     style.FontSizeBase = 13;
-    cluster::load_embedded_ui_font();
+    cluster::load_ui_fonts(options_.fonts);
 
     if (!ImGui_ImplSDL3_InitForSDLRenderer(window_, renderer_) ||
         !ImGui_ImplSDLRenderer3_Init(renderer_)) {

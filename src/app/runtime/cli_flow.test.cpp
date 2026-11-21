@@ -912,6 +912,7 @@ int main(int argc, char **argv) try {
                 {"discovery_root", (root / "fixture-sdk-discovery").string()},
                 {"state", (root / "placement.json").string()},
                 {"assets", (selected_machine / "ui/wheel").string()},
+                {"fonts", (selected_machine / "ui/fonts").string()},
                 {"splash", (selected_machine / "ui/splash.png").string()}};
 
         if (!gpu_mode.empty()) {
@@ -1705,6 +1706,7 @@ int main(int argc, char **argv) try {
                                    {"discovery_root", (root / "sdk-running").string()},
                                    {"splash", (root / "splash.png").string()},
                                    {"assets", (root / "assets").string()},
+                                   {"fonts", (root / "fonts").string()},
                                    {"state", (root / "placement.json").string()}};
             write_private_json(launch_directory / "android-launch.json", android);
             const auto native = presentation_probe(native_background);
@@ -1976,6 +1978,7 @@ int main(int argc, char **argv) try {
                                    {"discovery_root", (root / "sdk-running").string()},
                                    {"splash", (root / "splash.png").string()},
                                    {"assets", (root / "assets").string()},
+                                   {"fonts", (root / "fonts").string()},
                                    {"state", (root / "placement.json").string()}};
             write_private_json(launch_directory / "android-launch.json", android);
             auto frontend_args = [&]() {

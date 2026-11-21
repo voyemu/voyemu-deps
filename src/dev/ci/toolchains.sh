@@ -64,7 +64,7 @@ wheel_tool() {
 native_sources() {
     local url sha suffix
     while IFS=$'\t' read -r url sha; do
-        [[ "$url" =~ \.(tar\.gz|tar\.xz|zip|ttf)$ ]]
+        [[ "$url" =~ \.(tar\.gz|tar\.xz|zip)$ ]]
         suffix=${BASH_REMATCH[0]}
         fetch "$url" "$sha" "$downloads/sources/$sha$suffix"
     done < <(jq -er '.dependencies[] | [.url, .archive_sha256] | @tsv' src/app/dependencies.lock.json

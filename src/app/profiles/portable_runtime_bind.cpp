@@ -435,6 +435,7 @@ std::filesystem::path bind_machine_configuration(const std::filesystem::path &ro
         }
 
         if (frontend.value("assets", std::string{}) != (seed / "ui/wheel").string() ||
+            frontend.value("fonts", std::string{}) != (seed / "ui/fonts").string() ||
             frontend.value("splash", std::string{}) != (seed / "ui/splash.png").string() ||
             frontend.value("startup", Json()) != portable_startup_animations(seed) ||
             frontend.value("startup_video", Json()) !=
@@ -1319,6 +1320,7 @@ std::filesystem::path bind_machine_configuration(const std::filesystem::path &ro
                     {"executable", current_program.string()},
                     {"source_root", root.string()},
                     {"assets", assets.string()},
+                    {"fonts", (seed / "ui/fonts").string()},
                     {"splash", splash.string()},
                     {"state",
                      (native_current_active_directory(root, profile, machine).parent_path() /

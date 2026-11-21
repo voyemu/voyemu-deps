@@ -284,16 +284,18 @@ void keyboard_smoke(const Json &proof) {
 
 int main(int argc, char **argv) {
     try {
-        need(argc == 5 || argc == 6, "usage: window_sdl_test VIEWER ASSETS SPLASH PRIVATE_OUTPUT "
-                                     "[input|keyboard|startup|screens]");
-        const std::string mode = argc == 6 ? argv[5] : "";
+        need(argc == 6 || argc == 7,
+             "usage: window_sdl_test VIEWER ASSETS FONTS SPLASH PRIVATE_OUTPUT "
+             "[input|keyboard|startup|screens]");
+        const std::string mode = argc == 7 ? argv[6] : "";
         need(mode.empty() || mode == "input" || mode == "keyboard" || mode == "startup" ||
                      mode == "screens",
              "unknown smoke mode");
         const auto viewer = std::filesystem::canonical(argv[1]),
                    assets = std::filesystem::canonical(argv[2]),
-                   splash = std::filesystem::canonical(argv[3]);
-        const std::filesystem::path output = argv[4];
+                   fonts = std::filesystem::canonical(argv[3]),
+                   splash = std::filesystem::canonical(argv[4]);
+        const std::filesystem::path output = argv[5];
         ensure_private_directory(output);
         const auto id = random_token();
         const auto session = output / id;
@@ -364,6 +366,8 @@ int main(int argc, char **argv) {
                           (session / "absent-endpoint.json").string(),
                           "--assets",
                           assets.string(),
+                          "--fonts",
+                          fonts.string(),
                           "--profile",
                           "synthetic-host-ui-no-sdk",
                           "--with-cluster",
@@ -457,7 +461,7 @@ int main(int argc, char **argv) {
         // SDL's offscreen driver focuses every shown window; real desktops must not.
         const char *driver = std::getenv("SDL_VIDEO_DRIVER");
         const bool offscreen = driver && std::string_view(driver) == "offscreen";
-        // The language choice draws 中文 with the embedded Chinese glyphs on every host.
+        // The language choice draws 中文 with the Chinese face of the machine fonts.
         need(proof.at("chinese_glyph") == true, "the label font must draw Chinese");
         need(proof.at("touches_released") == true && proof.at("background") == true &&
                      proof.at("activation_requested") == false &&

@@ -15,12 +15,6 @@ struct Deflated {
 
 Deflated deflated(Resource id) {
     switch (id) {
-    case Resource::RegularFont:
-        return {regular_font, regular_font_size};
-    case Resource::MediumFont:
-        return {medium_font, medium_font_size};
-    case Resource::BoldFont:
-        return {bold_font, bold_font_size};
     case Resource::Icon:
         return {application_icon, application_icon_size};
     case Resource::LogoText:
@@ -29,12 +23,6 @@ Deflated deflated(Resource id) {
         return {logo_figure, logo_figure_size};
     case Resource::ScreensIcon:
         return {screens_icon, screens_icon_size};
-    case Resource::ChineseFont:
-        return {chinese_font, chinese_font_size};
-    case Resource::ChineseMediumFont:
-        return {chinese_medium_font, chinese_medium_font_size};
-    case Resource::ChineseBoldFont:
-        return {chinese_bold_font, chinese_bold_font_size};
     }
 
     throw std::invalid_argument("UI_RESOURCE: unknown resource");

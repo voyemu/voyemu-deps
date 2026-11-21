@@ -1,107 +1,155 @@
 #include "cluster_font.hpp"
 #include "error.hpp"
 #include "imgui.h"
-#include "process.hpp"
-#include "ui_resources.hpp"
 #include <cstdio>
-#include <stdexcept>
+#include <fstream>
+#include <optional>
+#include <string>
+#include <string_view>
 
 namespace voyemu::cluster {
 namespace {
-// Chinese labels come from the embedded Noto Sans SC subsets, each merged into the Inter face of
-// its weight.
-void merge_chinese(ui::Resource id) {
-    const auto bytes = ui::resource(id);
-    ImFontConfig config;
+constexpr std::array<const char *, 3> face_names{"Regular", "Medium", "Bold"};
+std::array<float, 3> heights_per_em{1, 1, 1};
 
-    config.MergeMode = true;
-    config.FontDataOwnedByAtlas = false;
-    static const ImWchar ranges[] = {0x3000, 0x303f, 0x4e00, 0x9fff, 0xff00, 0xffef, 0};
+[[noreturn]] void rebuild(const std::filesystem::path &file) {
+    throw VoyemuError("UI_FONT", file.filename().string() +
+                                         " of the machine is missing or unreadable; rebuild the "
+                                         "machine");
+}
 
-    if (!ImGui::GetIO().Fonts->AddFontFromMemoryTTF(const_cast<std::uint8_t *>(bytes.data()),
-                                                    static_cast<int>(bytes.size()), 13, &config,
-                                                    ranges)) {
-        throw VoyemuError("UI_FONT", "embedded Chinese font unavailable");
+std::uint32_t big_endian(const unsigned char *bytes, int count) {
+    std::uint32_t value = 0;
+
+    for (int i = 0; i < count; ++i) {
+        value = value << 8 | bytes[i];
     }
+
+    return value;
+}
+
+// The hhea ascent to descent height per head em that stb_truetype scales a pixel height by.
+std::optional<float> height_per_em(const std::filesystem::path &file) {
+    std::ifstream input(file, std::ios::binary);
+    unsigned char header[12]{};
+
+    if (!input.read(reinterpret_cast<char *>(header), sizeof header)) {
+        return std::nullopt;
+    }
+
+    const auto tables = big_endian(header + 4, 2);
+    std::optional<std::uint32_t> head, hhea;
+
+    for (std::uint32_t i = 0; i < tables && i < 128; ++i) {
+        unsigned char entry[16]{};
+
+        if (!input.read(reinterpret_cast<char *>(entry), sizeof entry)) {
+            return std::nullopt;
+        }
+
+        const std::string_view tag(reinterpret_cast<const char *>(entry), 4);
+
+        if (tag == "head") {
+            head = big_endian(entry + 8, 4);
+        } else if (tag == "hhea") {
+            hhea = big_endian(entry + 8, 4);
+        }
+    }
+
+    unsigned char em[2]{}, metrics[4]{};
+
+    if (!head || !hhea || !input.seekg(*head + 18) ||
+        !input.read(reinterpret_cast<char *>(em), 2) || !input.seekg(*hhea + 4) ||
+        !input.read(reinterpret_cast<char *>(metrics), 4) || big_endian(em, 2) == 0) {
+        return std::nullopt;
+    }
+
+    const auto ascent = static_cast<std::int16_t>(big_endian(metrics, 2)),
+               descent = static_cast<std::int16_t>(big_endian(metrics + 2, 2));
+
+    return float(ascent - descent) / float(big_endian(em, 2));
 }
 
 // The Latin, Russian and symbol glyphs that the window shows.
-ImFont *check_coverage(ImFont *font) {
+bool covers_latin(ImFont *font) {
     for (ImWchar c = 0x20; c <= 0x7e; ++c) {
         if (!font->IsGlyphInFont(c)) {
-            throw VoyemuError("UI_FONT", "Native UI font is missing a Latin UI glyph");
+            return false;
         }
     }
 
     for (ImWchar c = 0x0410; c <= 0x044f; ++c) {
         if (!font->IsGlyphInFont(c)) {
-            throw VoyemuError("UI_FONT", "Native UI font is missing a Russian UI glyph");
+            return false;
         }
     }
 
-    for (const ImWchar c : {0x0401, 0x0451, 0x00a9, 0x00b0, 0x00b7, 0x2014, 0x2026}) {
+    for (const ImWchar c :
+         {0x0401, 0x0451, 0x00ab, 0x00bb, 0x00a9, 0x00b0, 0x00b7, 0x2014, 0x2026}) {
         if (!font->IsGlyphInFont(c)) {
-            throw VoyemuError("UI_FONT", "Native UI font is missing a required UI symbol");
+            return false;
         }
     }
 
-    return font;
+    return true;
 }
 
-ImFont *load_face(const std::filesystem::path &path, const char *name, std::uintmax_t bytes,
-                  const char *sha) {
-    if (!std::filesystem::is_regular_file(path) || std::filesystem::file_size(path) != bytes ||
-        sha256_file(path) != sha) {
-        throw VoyemuError("UI_FONT",
-                          std::string("Native ") + name + " resource does not match its exact pin");
+ImFont *add_face(const std::filesystem::path &file, const char *name, bool merge) {
+    if (!std::filesystem::is_regular_file(file)) {
+        rebuild(file);
     }
 
-    const auto utf8 = path.u8string();
+    const auto utf8 = file.u8string();
     ImFontConfig config;
-    std::snprintf(config.Name, sizeof(config.Name), "%s", name);
+    config.MergeMode = merge;
+
+    if (name) {
+        std::snprintf(config.Name, sizeof(config.Name), "%s", name);
+    }
+
     auto *font = ImGui::GetIO().Fonts->AddFontFromFileTTF(
             reinterpret_cast<const char *>(utf8.c_str()), 13, &config);
 
     if (!font) {
-        throw VoyemuError("UI_FONT", "Cannot load the pinned native UI font");
+        rebuild(file);
     }
 
-    return check_coverage(font);
+    return font;
 }
 } // namespace
 
-void load_embedded_ui_font() {
-    // The faces are subsets of the pinned Inter fonts made at configure; see
-    // src/app/CMakeLists.txt.
-    auto load = [](ui::Resource id, const char *name) {
-        const auto bytes = ui::resource(id);
-        ImFontConfig config;
-        config.FontDataOwnedByAtlas = false;
-        std::snprintf(config.Name, sizeof(config.Name), "%s", name);
-        auto *face = ImGui::GetIO().Fonts->AddFontFromMemoryTTF(
-                const_cast<std::uint8_t *>(bytes.data()), static_cast<int>(bytes.size()), 13,
-                &config);
+void load_ui_fonts(const std::filesystem::path &directory) {
+    ImFont *regular = nullptr;
 
-        if (!face) {
-            throw VoyemuError("UI_FONT", "embedded font unavailable");
+    // The Latin and Cyrillic face comes first, so its glyphs, « and » among them, win over those
+    // of the Chinese face merged after it.
+    for (std::size_t weight = 0; weight < ui_font_weights.size(); ++weight) {
+        const auto latin = directory / (std::string("latin-") + ui_font_weights[weight] + ".ttf"),
+                   chinese = directory / (std::string("cjk-") + ui_font_weights[weight] + ".ttf");
+        auto *face = add_face(latin, face_names[weight], false);
+        const auto height = height_per_em(latin);
+
+        if (!height || !covers_latin(face)) {
+            rebuild(latin);
         }
 
-        return check_coverage(face);
-    };
-    auto *regular = load(ui::Resource::RegularFont, "Inter Regular");
+        heights_per_em[weight] = *height;
+        add_face(chinese, nullptr, true);
 
-    merge_chinese(ui::Resource::ChineseFont);
-    load(ui::Resource::MediumFont, "Inter Medium");
-    merge_chinese(ui::Resource::ChineseMediumFont);
-    load(ui::Resource::BoldFont, "Inter Bold");
-    merge_chinese(ui::Resource::ChineseBoldFont);
+        if (!face->IsGlyphInFont(0x4e2d) || !face->IsGlyphInFont(0x6587)) {
+            rebuild(chinese);
+        }
+
+        regular = regular ? regular : face;
+    }
+
     ImGui::GetIO().FontDefault = regular;
 }
 
 ImFont *ui_text_font(UiFontRole role) {
-    const char *name = role == UiFontRole::Emphasis ? "Inter Medium"
-                       : role == UiFontRole::Choice ? "Inter Bold"
-                                                    : "Inter Regular";
+    const char *name = role == UiFontRole::Emphasis ? face_names[1]
+                       : role == UiFontRole::Choice ? face_names[2]
+                                                    : face_names[0];
 
     for (auto *font : ImGui::GetIO().Fonts->Fonts) {
         if (std::string(font->GetDebugName()) == name) {
@@ -116,17 +164,7 @@ ImFont *tab_font() {
     return ui_text_font(UiFontRole::Emphasis);
 }
 
-void load_ui_font(const std::filesystem::path &path) {
-    // The renderer has no variable-axis selection; use the publisher's unmodified static faces.
-    auto *regular = load_face(path, "Inter Regular", 411640, ui_font_sha256);
-
-    merge_chinese(ui::Resource::ChineseFont);
-    load_face(path.parent_path() / "Inter-Medium.ttf", "Inter Medium", 417300,
-              "97ad806f526e41546d46365bb3a393145f75b7b1568913db74549ad8b8dba872");
-    merge_chinese(ui::Resource::ChineseMediumFont);
-    load_face(path.parent_path() / "Inter-Bold.ttf", "Inter Bold", 420428,
-              "288316099b1e0a47a4716d159098005eef7c0066921f34e3200393dbdb01947f");
-    merge_chinese(ui::Resource::ChineseBoldFont);
-    ImGui::GetIO().FontDefault = regular;
+float ui_font_height_per_em(UiFontRole role) {
+    return heights_per_em[role == UiFontRole::Emphasis ? 1 : role == UiFontRole::Choice ? 2 : 0];
 }
 } // namespace voyemu::cluster

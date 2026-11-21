@@ -1,6 +1,6 @@
 include("${CMAKE_CURRENT_LIST_DIR}/embedded_deflate.cmake")
 set(voyemu_ui_resources "")
-foreach(pair IN ITEMS "regular_font|${CLUSTER_UI_FONT}" "medium_font|${CLUSTER_UI_TAB_FONT}" "bold_font|${CLUSTER_UI_BOLD_FONT}" "application_icon|${CMAKE_CURRENT_SOURCE_DIR}/../assets/voyemu-icon.png" "logo_text|${CMAKE_CURRENT_SOURCE_DIR}/../assets/voyemu-logo-text.svg" "logo_figure|${CMAKE_CURRENT_SOURCE_DIR}/../assets/voyemu-logo-figure.svg" "screens_icon|${CMAKE_CURRENT_SOURCE_DIR}/../assets/voyemu-screens-icon.svg" "chinese_font|${CLUSTER_CJK_FONT}" "chinese_medium_font|${CLUSTER_CJK_MEDIUM_FONT}" "chinese_bold_font|${CLUSTER_CJK_BOLD_FONT}")
+foreach(pair IN ITEMS "application_icon|${CMAKE_CURRENT_SOURCE_DIR}/../assets/voyemu-icon.png" "logo_text|${CMAKE_CURRENT_SOURCE_DIR}/../assets/voyemu-logo-text.svg" "logo_figure|${CMAKE_CURRENT_SOURCE_DIR}/../assets/voyemu-logo-figure.svg" "screens_icon|${CMAKE_CURRENT_SOURCE_DIR}/../assets/voyemu-screens-icon.svg")
     string(REPLACE "|" ";" entry "${pair}")
     list(GET entry 0 name)
     list(GET entry 1 path)
