@@ -109,7 +109,8 @@ inline QnxInterguestBinding qnx_passion_ram_binding(const Json &runtime, bool pr
 inline QnxInterguestBinding qnx_interguest_binding(const Json &runtime) {
     validate_qnx_interguest_contract(runtime.at("interguest_network"));
 
-    return qnx_passion_ram_binding(runtime, false);
+    return qnx_passion_ram_binding(runtime, runtime.value("hardware_adapter", std::string{}) ==
+                                                    "sa8155-passion-21480");
 }
 
 inline QnxInterguestBinding qnx_ram_binding(const Json &runtime) {

@@ -201,15 +201,10 @@ qm_icxml=/slm/ic_qt.xml
 echo "QPC Dicxml=$qm_icxml logwrite=$([ -w /var/log ] && echo yes || echo no)"
 echo "QPC Dstartup_script size=$([ -e /scripts/startup.sh ] && /usr/bin/wc -c < /scripts/startup.sh || echo none)"
 [ -n "$qm_ifconfig" ] && { qm_cmd "$qm_ifconfig" lo0 up || echo 'QPC NETWORK loopback failed'; }
-# someipd-vlan1X bind -d vlan1X, so the OEM start_config_vlan and static_arp_config commands
-# run with tap0 as the parent in place of the absent emac0; SLM then starts ic_service and ic_server.
-qm_cmd "$qm_ifconfig" tap0 create up&&/usr/bin/awk '/^ +(ifconfig vlan|arp -s)/{sub(/emac0/,"tap0");print}' /scripts/startup.sh>/var/log/v&&. /var/log/v
-if [ "${VOYEMU_PASSION_QNET-}" = 1 ] && [ -n "$qm_ifconfig" ]; then
- [ -e /dev/tap0 ] || exit 1
- qm_cmd "$qm_ifconfig" tap0 172.16.100.22 netmask 255.255.255.0 up || exit 1
- VOYEMU_QNET_RELAY=1 LD_PRELOAD=$qm_snap /bin/ls -d / >&2 &
- echo "QPC QNET relay_pid=$! readiness=unverified"
-fi
+# Prepared from the pinned OEM /scripts/startup.sh: someipd-vlan1X bind -d vlan1X, so the SOME/IP
+# VLANs and static ARP go on tap0 in place of the absent emac0, then the tap-ram relay starts;
+# SLM then starts ic_service and ic_server.
+. ${qm_s}n/display_debug_tools.sh || echo 'QPC NETWORK failed'
 [ -n "$qm_ifconfig" ] && qm_cmd "$qm_ifconfig" -a > /var/log/interfaces.log 2>&1
 [ -n "$qm_cat" ] && "$qm_cat" /var/log/interfaces.log
 # setup_qt_env from scripts/startup.sh, with the OEM's own recorded physical screen size.

@@ -7,7 +7,9 @@
 #include "qnx_imagefs.hpp"
 #include "qnx_lzo.hpp"
 #include "qnx_startup.hpp"
+#include <algorithm>
 #include <array>
+#include <set>
 #include <stdexcept>
 #include <vector>
 namespace voyemu {
@@ -142,7 +144,8 @@ void validate_qnx_passion_runtime(std::string_view runtime) {
                  runtime.find(",address=0x7c008000") != std::string_view::npos &&
                  runtime.find(",address=0x27c008000") != std::string_view::npos &&
                  runtime.find("/slm/ic_qt/ic_qt.xml") != std::string_view::npos &&
-                 runtime.find("/usr/bin/ic_service") != std::string_view::npos,
+                 runtime.find("/usr/bin/ic_service") != std::string_view::npos &&
+                 runtime.find(". ${qm_s}n/display_debug_tools.sh") != std::string_view::npos,
          "QNX_PASSION_RUNTIME_CONTRACT");
 }
 
@@ -153,6 +156,71 @@ std::string prepare_qnx_passion_runtime(std::string_view source) {
     validate_qnx_passion_runtime(runtime);
 
     return runtime;
+}
+
+std::string qnx_passion_network_script(std::string_view oem_startup, std::string_view address) {
+    // Only the bodies of the two OEM functions are replayed; emac0 is the controller the VM lacks.
+    std::string commands;
+    std::set<std::string> vlans;
+    unsigned arp = 0;
+
+    for (const std::string_view function :
+         {"start_config_vlan()\n{\n", "static_arp_config()\n{\n"}) {
+        const auto begin = oem_startup.find(function);
+        need(begin != std::string_view::npos &&
+                     oem_startup.find(function, begin + 1) == std::string_view::npos,
+             "QNX_PASSION_NETWORK_SOURCE");
+        const auto body = begin + function.size();
+        const auto end = oem_startup.find("\n}\n", body);
+        need(end != std::string_view::npos, "QNX_PASSION_NETWORK_SOURCE");
+
+        for (std::size_t at = body; at < end;) {
+            auto next = oem_startup.find('\n', at);
+            auto line = oem_startup.substr(at, next - at);
+            at = next + 1;
+            line.remove_prefix(std::min(line.find_first_not_of(' '), line.size()));
+
+            if (line.starts_with("ifconfig vlan")) {
+                std::string text(line);
+                const auto parent = text.find(" vlanif emac0");
+
+                if (parent != std::string::npos) {
+                    need(text.size() == parent + 13, "QNX_PASSION_NETWORK_SOURCE");
+                    text.replace(parent, 13, " vlanif tap0");
+                }
+
+                vlans.insert(text.substr(9, text.find(' ', 9) - 9));
+                commands += text + " || return 1\n";
+            } else if (line.starts_with("arp -s ")) {
+                // An address outside the VLAN subnets (the OEM emac0 one) has no route here.
+                commands += std::string(line) + " || echo 'QPC NETWORK " + std::string(line) +
+                            " failed'\n";
+                ++arp;
+            } else {
+                need(line.empty() || line.starts_with("log_launch "), "QNX_PASSION_NETWORK_SOURCE");
+            }
+        }
+    }
+
+    need(vlans == std::set<std::string>{"vlan4", "vlan10", "vlan11", "vlan12", "vlan13",
+                                        "vlan14"} &&
+                 commands.find("\narp -s 172.16.112.10 02:DF:53:00:00:00 ||") !=
+                         std::string::npos &&
+                 arp > 0 && commands.find("emac0") == std::string::npos,
+         "QNX_PASSION_NETWORK_SOURCE");
+
+    for (const auto *id : {"4", "10", "11", "12", "13", "14"}) {
+        const auto vlan = std::string("ifconfig vlan") + id;
+        need(commands.find(vlan + " create ||") != std::string::npos &&
+                     commands.find(vlan + " vlan " + id + " vlanif tap0 ||") != std::string::npos,
+             "QNX_PASSION_NETWORK_SOURCE");
+    }
+
+    return "ifconfig tap0 create up || return 1\nifconfig tap0 " + std::string(address) +
+           " netmask 255.255.255.0 up || return 1\n" + commands +
+           "VOYEMU_QNET_RELAY=1 LD_PRELOAD=$qm_snap /bin/ls -d / >&2 &\n"
+           "echo \"QPC QNET relay_pid=$! vlans=6 arp=" +
+           std::to_string(arp) + "\"\n";
 }
 
 std::string adapt_qnx_passion_startupmgr_dispatch(std::string_view original,

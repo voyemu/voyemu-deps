@@ -29,6 +29,49 @@ template <class Function> void rejects(Function action) {
     need(failed);
 }
 
+// Synthetic OEM startup functions: one VLAN per line kind, the S32G M-core ARP, unrelated noise.
+void network_script() {
+    std::string vlans;
+
+    for (const auto *id : {"4", "10", "11", "12", "13", "14"}) {
+        vlans += std::string("    ifconfig vlan") + id + " create\n    ifconfig vlan" + id +
+                 " vlan " + id + " vlanif emac0\n    ifconfig vlan" + id + " 172.16.1" + id +
+                 ".30 netmask 255.255.255.0 up\n\n";
+    }
+
+    const std::string oem =
+            "ifconfig emac0 up\nstart_config_vlan()\n{\n    log_launch \"config vlan\"\n\n" +
+            vlans +
+            "}\nstatic_arp_config()\n{\n    log_launch \"arp\"\n    arp -s 172.16.112.10 "
+            "02:DF:53:00:00:00\n    arp -s 172.16.112.40 02:DF:53:00:00:04\n}\n"
+            "start_config_vlan\n";
+    const auto script = qnx_passion_network_script(oem, "172.16.100.22");
+    need(script.starts_with(
+                 "ifconfig tap0 create up || return 1\nifconfig tap0 172.16.100.22 "
+                 "netmask 255.255.255.0 up || return 1\nifconfig vlan4 create || return 1\n") &&
+         script.find("ifconfig vlan12 vlan 12 vlanif tap0 || return 1\n") != script.npos &&
+         script.find("arp -s 172.16.112.10 02:DF:53:00:00:00 || echo 'QPC NETWORK arp -s "
+                     "172.16.112.10 02:DF:53:00:00:00 failed'\n") != script.npos &&
+         script.find("emac0") == script.npos && script.find("log_launch") == script.npos &&
+         script.find("VOYEMU_QNET_RELAY=1 LD_PRELOAD=$qm_snap ") != script.npos &&
+         script.ends_with("echo \"QPC QNET relay_pid=$! vlans=6 arp=2\"\n"));
+    auto change = [&](std::string_view before, std::string_view after) {
+        auto bad = oem;
+        bad.replace(bad.find(before), before.size(), after);
+        rejects([&] {
+            qnx_passion_network_script(bad, "172.16.100.22");
+        });
+    };
+    change("    ifconfig vlan14 create\n", "");
+    change("    ifconfig vlan14 create\n",
+           "    ifconfig vlan14 create\n    ifconfig vlan15 create\n");
+    change("02:DF:53:00:00:00", "02:DF:53:00:00:01");
+    change("    log_launch \"arp\"\n", "    route add default 172.16.110.20\n");
+    change("vlan 12 vlanif emac0", "vlan 12 vlanif emac0 up");
+    change("static_arp_config()", "static_arp()");
+    change("ifconfig emac0 up\n", "start_config_vlan()\n{\n}\n");
+}
+
 std::string read(const char *name) {
     std::ifstream input(name, std::ios::binary);
 
@@ -490,8 +533,12 @@ int main(int argc, char **argv) {
              var_mount != root_runtime.npos && oem_root < var_disk && var_disk < var_mount &&
              root_runtime.find("automount=hd1:") == root_runtime.npos);
         const std::string runtime =
-                "\nqm_source_capture=1\ncapacity=2462832,address=0x7c008000 hd2:capacity=2462832,address=0x27c008000 /slm/ic_qt/ic_qt.xml /usr/bin/ic_service";
+                "\nqm_source_capture=1\ncapacity=2462832,address=0x7c008000 hd2:capacity=2462832,address=0x27c008000 /slm/ic_qt/ic_qt.xml /usr/bin/ic_service\n. ${qm_s}n/display_debug_tools.sh";
         validate_qnx_passion_runtime(runtime);
+        rejects([&] {
+            validate_qnx_passion_runtime(runtime.substr(0, runtime.rfind('\n')));
+        });
+        network_script();
         /* The capacity is deliberately not part of the shared contract (the OEM script and this
          * runtime size different devices), so the rejected variants change what the contract does
          * pin. */

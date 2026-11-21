@@ -141,8 +141,13 @@ int main() try {
         rejects([&] {
             qnx_ram_binding(bad);
         });
-        bad = production;
-        bad["interguest_network"] = qnx_interguest_contract();
+        // The production adapter carries the network without the developer RAM contract.
+        auto network = production;
+        network["interguest_network"] = qnx_interguest_contract();
+        assert(qnx_interguest_binding(network).passion &&
+               qnx_ram_binding(network).geometry == InterguestLink::RamGeometry::passion);
+        bad = network;
+        bad["interguest_ram"] = qnx_passion_interguest_ram_contract();
         rejects([&] {
             qnx_interguest_binding(bad);
         });

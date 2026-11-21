@@ -131,11 +131,6 @@ inline QnxRuntimeLayout qnx_runtime_layout(std::string_view profile, const Json 
     }
 
     if (metadata.contains("interguest_network")) {
-        if (spec.platform == QnxGuestPlatform::passion) {
-            throw VoyemuError("QNX_LAYOUT",
-                              "interguest network requires its accepted guest adapter");
-        }
-
         validate_qnx_interguest_contract(metadata.at("interguest_network"));
         layout.interguest_network = metadata.at("interguest_network");
     }

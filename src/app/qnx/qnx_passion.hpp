@@ -33,6 +33,9 @@ update_qnx_passion_display_modules(std::string_view display, std::string_view ma
                                    std::string_view expected_runtime_sha256 = {});
 void validate_qnx_passion_runtime(std::string_view runtime);
 std::string prepare_qnx_passion_runtime(std::string_view source);
+// Guest network script from the pinned OEM /scripts/startup.sh: the cluster's SOME/IP VLANs and
+// static ARP on tap0 in place of the absent emac0, then the tap-ram relay; the runtime sources it.
+std::string qnx_passion_network_script(std::string_view oem_startup, std::string_view address);
 std::string adapt_qnx_passion_startupmgr_entry(std::string_view original, std::string_view reader);
 std::string adapt_qnx_passion_boot_script(std::string_view original);
 std::string adapt_qnx_passion_procnto_environment(std::string_view original);

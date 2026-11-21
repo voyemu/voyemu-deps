@@ -91,6 +91,13 @@ int main() try {
 
     auto passion_network = passion_metadata;
     passion_network["interguest_network"] = qnx_interguest_contract();
+    assert(qnx_runtime_layout(passion_profile, passion_network).interguest_network ==
+           qnx_interguest_contract());
+    // The Passion machine carries the same tap-ram contract through its portable metadata.
+    Json passion_forwarded;
+    qnx_runtime_metadata(passion_forwarded, qnx_portable_layout(passion_profile, passion_network));
+    assert(passion_forwarded.at("interguest_network") == qnx_interguest_contract());
+    passion_network["interguest_network"]["address"] = "10.0.2.2";
     rejects([&] {
         qnx_runtime_layout(passion_profile, passion_network);
     });

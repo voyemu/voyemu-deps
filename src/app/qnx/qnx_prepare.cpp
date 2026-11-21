@@ -937,6 +937,9 @@ Json prepare_qnx_passion_developer_images(const std::filesystem::path &root,
                        root, "src/guest/qnx/qnx-passion-runtime.sh", guest_script_bytes)),
                screen_config = project_file_bytes(root, "src/guest/qnx/qnx-screen.conf", 1309);
     validate_qnx_passion_runtime(runtime);
+    const auto network = qnx_passion_network_script(
+            read_qnx6_file(files.at("system_la.img"), originals[2].sha, "scripts/startup.sh"),
+            qnx_interguest_contract().at("address").get<std::string>());
     // Our RAM device carries exactly the extent fs-qnx6 accepts (blocksize*blocks + the 0x3000
     // header and the 0x1000 alternate pair), so the capacity is pinned at this call site rather
     // than in the shared contract.
@@ -948,6 +951,7 @@ Json prepare_qnx_passion_developer_images(const std::filesystem::path &root,
                  read_qnx_imagefs_file(display, "bin/qditest").size() == 21313 &&
                  read_qnx_imagefs_file(display, "lib64/libopenwfd_qnx.so").size() == 97848 &&
                  read_qnx_imagefs_file(display, "etc/graphics.conf").size() == 1309 &&
+                 read_qnx_imagefs_file(display, "bin/display_debug_tools.sh").size() == 25091 &&
                  read_qnx_imagefs_file(disk, "bin/devb-ufs-qualcomm").size() == 88818,
          "QNX_PASSION_DEVELOPER_SLOT_GEOMETRY");
     const auto placement = qnx_passion_11713_placement();
@@ -982,6 +986,8 @@ Json prepare_qnx_passion_developer_images(const std::filesystem::path &root,
     replace_display("bin/ssplash", runtime);
     replace_display("lib64/libopenwfd_qnx.so", wfd);
     replace_display("etc/graphics.conf", screen_config);
+    // The unused OEM debug script slot carries the generated network script the runtime sources.
+    replace_display("bin/display_debug_tools.sh", network);
     auto new_disk = replace_qnx_imagefs_file(
             disk, "bin/devb-ufs-qualcomm",
             sha256_bytes(read_qnx_imagefs_file(disk, "bin/devb-ufs-qualcomm")), driver);
@@ -1162,8 +1168,10 @@ Json prepare_qnx_passion_developer_images(const std::filesystem::path &root,
             {"guest_build", guest},
             {"images", images},
             {"hardware_adapter", qnx_profile_adapter(config)},
+            {"interguest_network", qnx_interguest_contract()},
             {"memory_mib", 11713},
             {"runtime_sha256", sha256_bytes(runtime)},
+            {"network_script_sha256", sha256_bytes(network)},
             {"source_capture", 1},
             {"logical_ifs_bytes", ifs.size()},
             {"gpt_block_bytes", 4096},
