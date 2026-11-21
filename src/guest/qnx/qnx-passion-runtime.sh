@@ -165,9 +165,8 @@ qm_ln=$(qm_pick /proc/boot/bin/ln /sbin/ln) || qm_ln=
 qm_cat=$(qm_pick /proc/boot/bin/cat /usr/bin/cat) || qm_cat=
 qm_pidin=$(qm_pick /proc/boot/bin/pidin /sbin/pidin) || qm_pidin=
 qm_slm=$(qm_pick /proc/boot/bin/slm /usr/bin/slm) || qm_slm=
-qm_iopkt=$(qm_pick /proc/boot/bin/io-pkt-v6-hc /sbin/io-pkt-v6-hc) || qm_iopkt=
 qm_ifconfig=$(qm_pick /sbin/ifconfig /proc/boot/bin/ifconfig) || qm_ifconfig=
-echo "QPC D tools mkfs=$qm_mkfs0 mount=$qm_mount0 mkdir=$qm_mkdir0 ln=$qm_ln cat=$qm_cat sleep=$qm_sleep0 pidin=$qm_pidin slm=$qm_slm iopkt=$qm_iopkt ifconfig=$qm_ifconfig roudi=$qm_roudi on=$qm_on chmod=$qm_chmod0"
+echo "QPC D tools mkfs=$qm_mkfs0 mount=$qm_mount0 mkdir=$qm_mkdir0 ln=$qm_ln cat=$qm_cat sleep=$qm_sleep0 pidin=$qm_pidin slm=$qm_slm ifconfig=$qm_ifconfig roudi=$qm_roudi on=$qm_on chmod=$qm_chmod0"
 [ -n "$qm_mkfs0" ] || { echo 'QPC FAIL no-mkqnx6fs'; exit 1; }
 if [ -n "$qm_priv" ]; then
 qm_cmd "$qm_mkfs0" -q "$qm_priv" || echo 'QPC PRIVATE mkqnx6fs failed'
@@ -201,10 +200,12 @@ qm_icxml=/slm/ic_qt.xml
 [ -e "$qm_icxml" ] || qm_icxml=/slm/ic_qt/ic_qt.xml
 echo "QPC Dicxml=$qm_icxml logwrite=$([ -w /var/log ] && echo yes || echo no)"
 echo "QPC Dstartup_script size=$([ -e /scripts/startup.sh ] && /usr/bin/wc -c < /scripts/startup.sh || echo none)"
-[ -n "$qm_iopkt" ] && { qm_cmd "$qm_iopkt" || echo 'QPC NETWORK spawn failed'; }
 [ -n "$qm_ifconfig" ] && { qm_cmd "$qm_ifconfig" lo0 up || echo 'QPC NETWORK loopback failed'; }
+# someipd-vlan1X bind -d vlan1X, so the OEM start_config_vlan and static_arp_config commands
+# run with tap0 as the parent in place of the absent emac0; SLM then starts ic_service and ic_server.
+qm_cmd "$qm_ifconfig" tap0 create up&&/usr/bin/awk '/^ +(ifconfig vlan|arp -s)/{sub(/emac0/,"tap0");print}' /scripts/startup.sh>/var/log/v&&. /var/log/v
 if [ "${VOYEMU_PASSION_QNET-}" = 1 ] && [ -n "$qm_ifconfig" ]; then
- qm_cmd "$qm_ifconfig" tap0 create || exit 1
+ [ -e /dev/tap0 ] || exit 1
  qm_cmd "$qm_ifconfig" tap0 172.16.100.22 netmask 255.255.255.0 up || exit 1
  VOYEMU_QNET_RELAY=1 LD_PRELOAD=$qm_snap /bin/ls -d / >&2 &
  echo "QPC QNET relay_pid=$! readiness=unverified"
@@ -393,7 +394,8 @@ if [ -x /bin/input_service ]; then
  # /tmp/mega_ipc_pub-0 fine), so the daemon rides the same type as the pubs.
  "$qm_on" -T ic_apps_t -u 834:819 /bin/input_service -p ivi_compositor > /var/log/input_service.log 2>&1 & echo "QPC SPAWN input_service pid=$!"
 else echo 'QPC WHEEL no-input-service'; fi
-[ -n "$qm_on" ] && [ -x /usr/bin/ic_service ] && { "$qm_on" -T ic_apps_t -u 834:819 /usr/bin/ic_service > /var/log/icsvc.log 2>&1 & echo "QPC ICSVC pid=$!"; }
+# Started by SLM once someipd-vlan1X run; a second instance is never spawned.
+[ -n "$qm_on" ] && [ -x /usr/bin/ic_service ] && ! "$qm_pidin" ar|grep -q n/ic_service && { "$qm_on" -T ic_apps_t -u 834:819 /usr/bin/ic_service > /var/log/icsvc.log 2>&1 & echo "QPC ICSVC pid=$!"; }
 echo 'QPC ID'; /usr/bin/awk '/iceoryx|ic_apps|msg_center|^root/{print FILENAME": "$0}' /etc/group /etc/passwd 2>&1
 [ -n "$qm_slog2" ] && { "$qm_slog2" > /var/log/s0.log 2>&1; /usr/bin/awk '/QG3 READY/{print}' /var/log/s0.log; }
 # Theme listing: settled offline (theme-hunt-20261104): no QML theme in the supply.
