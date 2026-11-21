@@ -18,9 +18,9 @@ foreach(lang C CXX OBJC OBJCXX)
 endforeach()
 add_compile_options("$<$<COMPILE_LANGUAGE:C,CXX,OBJC,OBJCXX>:-ffunction-sections;-fdata-sections>")
 # The C sources are the pinned SDL3, curl, nghttp2 and miniz, and no exception unwinds through them:
-# the callbacks they call are noexcept or catch. On Linux they carry no unwind tables; Windows x64
-# requires them and the Mach-O linker keeps its compact unwind.
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+# the callbacks they call are noexcept or catch. On Linux and macOS they carry no unwind tables;
+# Windows x64 requires them.
+if(NOT WIN32)
     add_compile_options("$<$<COMPILE_LANGUAGE:C>:-fno-asynchronous-unwind-tables;-fno-unwind-tables>")
 endif()
 # A build without tests, as the release builds the launcher, links with full LTO on Linux and Windows;
