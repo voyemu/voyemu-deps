@@ -1151,6 +1151,10 @@ if(VOYEMU_BUILD_CLUSTER)
     # The window opens no Dear ImGui metrics, debug log or ID stack tool; every user of imgui.h shares
     # the definition, which changes the layout of ImGuiContext.
     target_compile_definitions(voyemu_imgui PUBLIC IMGUI_DISABLE_DEBUG_TOOLS)
+    # Dear ImGui and its SDL3 backends throw no exceptions; the one callback they call, the numeric
+    # input filter, only allocates, so they build without exception tables.
+    target_compile_options(voyemu_imgui PRIVATE -fno-exceptions)
+    set_source_files_properties("${IMGUI}/backends/imgui_impl_sdl3.cpp" "${IMGUI}/backends/imgui_impl_sdlrenderer3.cpp" PROPERTIES COMPILE_OPTIONS -fno-exceptions)
     include("${CMAKE_CURRENT_SOURCE_DIR}/ui_resources.cmake")
     add_library(voyemu_cluster_ui STATIC ui/licenses.cpp ui/cluster_ui.cpp ui/cluster_ui_controls.cpp ui/cluster_font.cpp ui/ui_resources.cpp ui/vector_artwork.cpp)
     target_include_directories(voyemu_cluster_ui PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
