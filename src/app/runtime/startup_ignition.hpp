@@ -36,7 +36,8 @@ public:
 
     explicit StartupIgnition(QnxEngine engine = host_qnx_engine) : engine_(engine) {}
 
-    // The qinggan09 and qinggan11 adapters project ign into the OEM power items of powermgr.
+    // The qinggan09 and qinggan11 adapters project the ignition into the OEM power items of
+    // powermgr.
     static bool applies(std::string_view adapter) {
         return std::any_of(qnx_adapter_registry.begin(), qnx_adapter_registry.end(),
                            [&](const QnxAdapterSpec &spec) {
@@ -45,9 +46,10 @@ public:
                            });
     }
 
-    // A model with ign already off keeps it off and starts no sequence.
+    // A model with the ignition already off keeps it off and starts no sequence.
     std::optional<Change> begin(const Json &state, Clock::time_point now) {
-        pending_ = state.at("raw_oem").at("ign") == 1;
+        catalog_ = state_catalog(state);
+        pending_ = concept_value(state, VehicleConcept::ignition) == 1;
         markers_ = false;
         boot_ = now + qnx_guest_deadline(engine_, boot_limit);
         deadline_ = Clock::time_point::max();
@@ -56,7 +58,7 @@ public:
             return std::nullopt;
         }
 
-        return Change{{{"ign", 0}}, "cluster_cold_start"};
+        return Change{concept_patch(catalog_, VehicleConcept::ignition, 0), "cluster_cold_start"};
     }
 
     // `QIP STARTUP ignition reason=R` is the request of the runtime with the startup sequence.
@@ -104,9 +106,9 @@ public:
         return on("cluster_closed");
     }
 
-    // A client value for ign ends the sequence and stays.
+    // A client value for the ignition ends the sequence and stays.
     void observe_patch(const Json &values) {
-        if (values.contains("ign")) {
+        if (values.contains(concept_field(catalog_, VehicleConcept::ignition))) {
             pending_ = false;
         }
     }
@@ -130,10 +132,11 @@ private:
 
         pending_ = false;
 
-        return Change{{{"ign", 1}}, std::move(reason)};
+        return Change{concept_patch(catalog_, VehicleConcept::ignition, 1), std::move(reason)};
     }
 
     QnxEngine engine_;
+    VehicleCatalog catalog_ = VehicleCatalog::qinggan09;
     bool pending_ = false, markers_ = false;
     // The boot bound follows the latest startup marker; the frames, gauge and animation bounds
     // only tighten.

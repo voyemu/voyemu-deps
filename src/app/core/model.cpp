@@ -46,6 +46,7 @@ namespace detail {
 const std::vector<Field> &qinggan11_catalog();
 const std::vector<Field> &passion_catalog();
 std::span<const SignalDefinition> passion_signals();
+void derive_concepts(VehicleCatalog catalog, Json &raw, const Json &values);
 } // namespace detail
 
 VehicleCatalog vehicle_catalog(std::string_view platform) {
@@ -760,7 +761,8 @@ void validate_state(const Json &state) {
         throw VoyemuError("VEHICLE_SCHEMA", "schema/map/origin mismatch");
     }
 
-    const auto &fields = catalog(state_catalog(state));
+    const auto catalog = state_catalog(state);
+    const auto &fields = voyemu::catalog(catalog);
 
     if (!integer(state["sequence"]) || state["sequence"].get<std::uint64_t>() == 0 ||
         state["sequence"].get<std::uint64_t>() > UINT32_MAX) {
@@ -795,25 +797,17 @@ void validate_state(const Json &state) {
         }
     }
 
-    if (raw.contains("speed") &&
-        (raw["speed"].get<unsigned>() > 255 ||
-         raw["speed10x"].get<unsigned>() != raw["speed"].get<unsigned>() * 10 ||
-         raw["soc"].get<unsigned>() > 100)) {
+    if (!concepts_consistent(catalog, raw)) {
         throw VoyemuError("VEHICLE_COUPLED", "speed/SOC invalid");
     }
 }
 
 Json normal_initial_values(VehicleCatalog catalog) {
+    using enum VehicleConcept;
     // Emulator fixture values; SOC, fuel and tyre readings are not OEM recommended defaults.
-    Json values{{"gear_valid", 1},       {"gear", 0},
-                {"spd_valid", 1},        {"speed", 0},
-                {"speed10x", 0},         {"vcu_ExhibitionSts", 0},
-                {"ambient_temp", 120},   {"soc", 55},
-                {"fuel_percent", 50},    {"door_fl", 0},
-                {"door_fr", 0},          {"door_rl", 0},
-                {"door_rr", 0},          {"fuel_cap", 0},
-                {"fuel_cap_err", 0},     {"dcdc_systemSts", 2},
-                {"esc_hhcAvailable", 1}, {"esc_hdcAvailable", 1}};
+    Json values{{"vcu_ExhibitionSts", 0}, {"ambient_temp", 120},  {"fuel_percent", 50},
+                {"fuel_cap", 0},          {"fuel_cap_err", 0},    {"dcdc_systemSts", 2},
+                {"esc_hhcAvailable", 1},  {"esc_hdcAvailable", 1}};
 
     for (const auto *corner : {"LF", "RF", "LR", "RR"}) {
         const auto name = std::string(corner);
@@ -823,16 +817,55 @@ Json normal_initial_values(VehicleCatalog catalog) {
         values["bcm_tyre" + name + "Temp"] = 81;
     }
 
-    // 13.80 V in the 0.01 V of the OEM powermgr: the DC-DC converter charges the battery at READY.
-    values["ic_bat_voltage"] = 1380;
-    // The READY flag of the qinggan11 VCU follows ready_lamp, see field_couplings.
-    values["vcu_ready"] = 1;
+    // The Passion belt and steering angle readings are valid.
+    for (const auto *name :
+         {"SeatBeltDetection.Notify_f_SeatBeltSts.SeatBeltSts.DriverSeatBeltStsValid",
+          "SeatBeltDetection.Notify_f_SeatBeltSts.SeatBeltSts.PassengerSeatBeltStsValid",
+          "SteeringSysInfo.Notify_f_SteeringSysSts.SteeringSysSts.SteeringSysSts."
+          "eps_sasSteeringAngleValid"}) {
+        values[name] = 1;
+    }
+
     Json result = Json::object();
 
     for (const auto &field : voyemu::catalog(catalog)) {
         if (values.contains(field.name)) {
             result[field.name] = values.at(field.name);
         }
+    }
+
+    // A parked vehicle at READY with closed doors, lamps off and buckled belts; 13.80 V is the
+    // DC-DC converter charging the battery at READY.
+    const std::vector<std::pair<VehicleConcept, std::int64_t>> concepts = {{speed, 0},
+                                                                           {speed_valid, 1},
+                                                                           {gear, 0},
+                                                                           {gear_valid, 1},
+                                                                           {charge, 55},
+                                                                           {ignition, 1},
+                                                                           {ready, 1},
+                                                                           {battery_voltage, 1380},
+                                                                           {turn_left, 0},
+                                                                           {turn_right, 0},
+                                                                           {position_lamp, 0},
+                                                                           {daytime_lamp, 0},
+                                                                           {low_beam, 0},
+                                                                           {high_beam, 0},
+                                                                           {rear_fog, 0},
+                                                                           {belt_driver, 0},
+                                                                           {belt_passenger, 0},
+                                                                           {belt_rear_left, 0},
+                                                                           {belt_rear_middle, 0},
+                                                                           {belt_rear_right, 0},
+                                                                           {door_front_left, 0},
+                                                                           {door_front_right, 0},
+                                                                           {door_rear_left, 0},
+                                                                           {door_rear_right, 0},
+                                                                           {hood, 0},
+                                                                           {tailgate, 0},
+                                                                           {steering_angle, 0}};
+
+    for (const auto &[id, logical] : concepts) {
+        concept_assign(catalog, result, id, logical);
     }
 
     return result;
@@ -905,9 +938,10 @@ Json select_vehicle_startup(VehicleStartup mode, VehicleCatalog catalog, const J
     return selected;
 }
 
-// A field that a patch of its source field also sets unless the patch names it itself: to the
-// source value times scale, or to value when scale is 0. Writers send one field and every writer
-// keeps the coupled fields consistent.
+// A Qinggan field that a patch of its source field also sets unless the patch names it itself: to
+// the source value times scale, or to value when scale is 0. Writers send one field and every
+// writer keeps the coupled fields consistent; the bound fields of a concept couple through its
+// binding.
 namespace {
 struct FieldCoupling {
     std::string source, target;
@@ -917,15 +951,12 @@ struct FieldCoupling {
 const std::vector<FieldCoupling> &field_couplings() {
     static const auto couplings = [] {
         std::vector<FieldCoupling> result = {
-                {"speed", "speed10x", 10, 0},
                 {"actual_power", "actual_power10x", 10, 0},
                 {"allowed_power", "allowed_power10x", 10, 0},
                 {"remain_mileage_e", "vcu_remainingMileageReal", 1, 0},
                 {"remain_mileage_e", "vcu_remainingMileageCLTCWLTC", 1, 0},
                 {"remain_mileage_f", "remain_mileage_f_nedc", 1, 0},
-                {"remain_mileage_f", "remain_mileage_f_wltc", 1, 0},
-                // The VCU of a qinggan11 vehicle reports READY in its own flag beside the lamp.
-                {"ready_lamp", "vcu_ready", 1, 0}};
+                {"remain_mileage_f", "remain_mileage_f_wltc", 1, 0}};
 
         // A tyre reading makes the measurement of its corner valid.
         for (const std::string corner : {"LF", "RF", "LR", "RR"}) {
@@ -947,7 +978,8 @@ const std::vector<FieldCoupling> &field_couplings() {
 Json apply_patch(const Json &original, const Json &values) {
     validate_state(original);
 
-    const auto &fields = catalog(state_catalog(original));
+    const auto catalog = state_catalog(original);
+    const auto &fields = voyemu::catalog(catalog);
 
     if (!values.is_object() || values.empty() || values.size() > fields.size()) {
         throw VoyemuError("VEHICLE_PATCH", "nonempty keyed values required");
@@ -988,16 +1020,7 @@ Json apply_patch(const Json &original, const Json &values) {
         }
     }
 
-    if (values.contains("speed10x") && !values.contains("speed")) {
-        auto speed = raw["speed10x"].get<std::uint64_t>();
-
-        if (speed % 10 != 0) {
-            throw VoyemuError("VEHICLE_COUPLED", "whole km/h required");
-        }
-
-        raw["speed"] = speed / 10;
-    }
-
+    detail::derive_concepts(catalog, raw, values);
     next["sequence"] = original["sequence"].get<std::uint64_t>() + 1;
     next["updated_utc"] = utc_now();
     validate_state(next);

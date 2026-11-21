@@ -365,6 +365,32 @@ void music_tab_animation() {
 }
 
 void parsing() {
+    {
+        // The controls of the window read and write the concepts through the fields of the
+        // platform: the Qinggan fields directly, the Passion signals in their encodings.
+        ViewState passion;
+        passion.platform = VehicleCatalog::passion;
+        passion.raw = initial_state(VehicleCatalog::passion).at("raw_oem");
+        const auto speed = concept_control(passion, VehicleConcept::speed);
+        check(speed.ends_with("VI_VehicleDisplaySpeed.VehicleSpeed") &&
+                      passion.raw.at(speed) == 50000 && control_value(passion, speed) == 0 &&
+                      control_value(passion, concept_control(passion, VehicleConcept::ready)) ==
+                              1 &&
+                      control_value(passion, concept_control(passion, VehicleConcept::hood)) == 0,
+              "Passion controls decode their signals");
+        check(concept_control(passion, VehicleConcept::battery_voltage) == "battery_voltage" &&
+                      !control_value(passion, "battery_voltage"),
+              "an unbound concept has no control value");
+        passion.raw[concept_control(passion, VehicleConcept::gear)] = 255;
+        check(!control_value(passion, concept_control(passion, VehicleConcept::gear)),
+              "an invalid gear shows no value");
+        ViewState qinggan;
+        qinggan.raw = initial_state(VehicleCatalog::qinggan09).at("raw_oem");
+        check(concept_control(qinggan, VehicleConcept::speed) == "speed" &&
+                      control_value(qinggan, "speed10x") == 0 &&
+                      control_value(qinggan, "odo") == qinggan.raw.at("odo").get<std::int64_t>(),
+              "Qinggan controls keep their raw fields");
+    }
     check(!parse_unsigned("", 8), "empty raw draft must stay local");
     check(!parse_unsigned("-1", 8), "negative raw must reject");
     check(!parse_unsigned("256", 8), "width overflow must reject");

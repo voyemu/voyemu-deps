@@ -238,9 +238,10 @@ void Session::apply_startup_ignition(const std::optional<StartupIgnition::Change
         return;
     }
 
-    apply_power_outcome(
-            power_.startup(model_.state(), change->values.at("ign") == 1, change->reason));
-    const Json receipt{{"ign", model_.state().at("raw_oem").at("ign")},
+    const auto on = concept_patch(state_catalog(model_.state()), VehicleConcept::ignition, 1);
+    apply_power_outcome(power_.startup(model_.state(), change->values == on, change->reason));
+    const auto ignition = concept_value(model_.state(), VehicleConcept::ignition);
+    const Json receipt{{"ign", ignition ? Json(*ignition) : Json()},
                        {"reason", change->reason},
                        {"pending", startup_ignition_.pending()},
                        {"revision", model_.state().at("sequence")}};

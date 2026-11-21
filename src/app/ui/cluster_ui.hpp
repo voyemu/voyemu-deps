@@ -74,11 +74,19 @@ struct ViewState {
          routes = Json::object(), wheel_capability = Json::object();
     // Fields that reach neither guest of the machine and stay in the model.
     std::set<std::string> model_only;
+    // The catalogue of the running machine, which map_sha256 of its state names.
+    VehicleCatalog platform = VehicleCatalog::qinggan09;
 };
 bool wheel_action_available(const ViewState &state, std::string_view id);
 // Whether a field reaches a guest of the machine; the window grays out the controls of the others
 // as a profile limit.
 bool field_reaches_guest(const ViewState &state, const std::string &name);
+// The field of the state that carries a concept, its primary field, or the concept name when the
+// platform does not bind it.
+std::string concept_control(const ViewState &state, VehicleConcept id);
+// The value of a field as the window shows it: the concept value of a bound primary field, else
+// the raw value; null for an absent field or no value.
+std::optional<std::int64_t> control_value(const ViewState &state, const std::string &name);
 // Only this thread touches the IPC client. The render thread never waits on a guest.
 class Client {
 public:

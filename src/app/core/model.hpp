@@ -96,6 +96,104 @@ const char *catalog_map_sha256(VehicleCatalog catalog);
 VehicleCatalog state_catalog(const Json &state);
 // The bytes a vehicle state file and a message carrying a state may take.
 inline constexpr std::size_t vehicle_state_bytes = 512 * 1024;
+// A vehicle concept that the shared logic reads and writes once for every platform; each catalogue
+// binds it to its own fields.
+enum class VehicleConcept {
+    speed,
+    speed_valid,
+    gear,
+    gear_valid,
+    charge,
+    ignition,
+    ready,
+    battery_voltage,
+    turn_left,
+    turn_right,
+    position_lamp,
+    daytime_lamp,
+    low_beam,
+    high_beam,
+    rear_fog,
+    belt_driver,
+    belt_passenger,
+    belt_rear_left,
+    belt_rear_middle,
+    belt_rear_right,
+    door_front_left,
+    door_front_right,
+    door_rear_left,
+    door_rear_right,
+    hood,
+    tailgate,
+    steering_angle,
+    acc_target_speed
+};
+// The logical value of a concept is an integer in unit, within minimum..maximum when given.
+struct ConceptDefinition {
+    VehicleConcept id;
+    std::string_view name, unit;
+    std::optional<std::int64_t> minimum, maximum;
+};
+const std::vector<ConceptDefinition> &vehicle_concepts();
+const ConceptDefinition &concept_definition(VehicleConcept id);
+struct ConceptValue {
+    std::int64_t logical;
+    std::uint64_t raw;
+};
+// How one field carries a concept: logical = raw * resolution + offset, or the logical value that
+// values lists for raw, the first entry of a logical value being its encoding; invalid is the raw
+// value of no value.
+struct ConceptEncoding {
+    double resolution = 1, offset = 0;
+    std::vector<ConceptValue> values;
+    std::optional<std::uint64_t> invalid;
+};
+// The primary field holds the concept; a mirror carries the same value in another encoding and
+// sets the primary when a writer names it alone; a follower takes the value of the primary when a
+// writer names the primary and not the follower.
+enum class ConceptRole {
+    primary,
+    mirror,
+    follower
+};
+struct ConceptField {
+    std::string field;
+    ConceptEncoding encoding;
+    ConceptRole role;
+};
+struct ConceptBinding {
+    VehicleConcept id;
+    std::vector<ConceptField> fields;
+};
+// The concepts a catalogue binds, its primary field first.
+const std::vector<ConceptBinding> &concept_bindings(VehicleCatalog catalog);
+const ConceptBinding *concept_binding(VehicleCatalog catalog, VehicleConcept id);
+// The binding of a field of a catalogue, or null.
+const ConceptBinding *field_binding(VehicleCatalog catalog, std::string_view field);
+// The raw value of logical in a field of width bits; null when the encoding cannot carry it.
+std::optional<std::uint64_t> concept_encode(const ConceptEncoding &encoding, std::int64_t logical,
+                                            unsigned width);
+// The logical value of raw before rounding; null for the invalid value or an unlisted raw value.
+std::optional<double> concept_decode(const ConceptEncoding &encoding, std::uint64_t raw);
+// The primary field of a concept; empty when the catalogue does not bind it.
+std::string concept_field(VehicleCatalog catalog, VehicleConcept id);
+// The value of a concept in a state, rounded to its unit; null when the catalogue does not bind
+// it or its primary field holds no value.
+std::optional<std::int64_t> concept_value(const Json &state, VehicleConcept id);
+// A patch setting a concept through its primary field, from which apply_patch derives mirrors and
+// followers; empty when the catalogue does not bind the concept.
+Json concept_patch(VehicleCatalog catalog, VehicleConcept id, std::int64_t logical);
+// concept_patch without the fields that already hold their value in state.
+Json concept_change(const Json &state, VehicleConcept id, std::int64_t logical);
+// Sets a concept in every bound field of raw, for a projection that bypasses apply_patch.
+void concept_assign(VehicleCatalog catalog, Json &raw, VehicleConcept id,
+                    std::int64_t logical);
+// Whether raw in a field keeps its concept valid: within the range of the concept for a primary
+// field, a whole logical value within the range for a mirror.
+bool concept_raw_allowed(VehicleCatalog catalog, std::string_view field, std::uint64_t raw);
+// Whether the primary field of each concept of raw lies within the range of its concept and each
+// mirror carries the value of its primary.
+bool concepts_consistent(VehicleCatalog catalog, const Json &raw);
 std::string utc_now();
 
 constexpr bool qnx_theme_display_matches(unsigned requested, std::uint64_t displayed) {

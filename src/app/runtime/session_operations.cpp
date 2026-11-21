@@ -265,7 +265,7 @@ Json Session::handle(const Json &operation) {
                                   "selected presentation vehicle state delivery is unavailable");
             }
 
-            // One field selects the power state; PowerEcu sets ign and ready_lamp from it.
+            // One field selects the power state; PowerEcu sets the ignition and READY from it.
             const auto &values = operation.at("values");
             const auto target = PowerEcu::parse(values.at("power"));
 
@@ -277,7 +277,8 @@ Json Session::handle(const Json &operation) {
 
             if (outcome.receipt.at("outcome") == "applied") {
                 startup_ignition_.observe_patch(
-                        Json{{"ign", *target >= PowerEcu::State::on ? 1 : 0}});
+                        concept_patch(state_catalog(model_.state()), VehicleConcept::ignition,
+                                      *target >= PowerEcu::State::on ? 1 : 0));
             }
 
             apply_power_outcome(std::move(outcome));

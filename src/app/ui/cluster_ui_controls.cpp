@@ -210,9 +210,13 @@ void Window::record_item(const std::string &name, const char *kind) {
                  {"enabled", !(ImGui::GetItemFlags() & ImGuiItemFlags_Disabled)}};
 
     if (std::string_view(kind) == "numeric" || std::string_view(kind) == "checkbox") {
-        item["profile_limit"] = name == "hazard" ? !field_reaches_guest(view_, "turn_left") ||
-                                                           !field_reaches_guest(view_, "turn_right")
-                                                 : !field_reaches_guest(view_, name);
+        item["profile_limit"] =
+                name == "hazard"
+                        ? !field_reaches_guest(view_,
+                                               concept_control(view_, VehicleConcept::turn_left)) ||
+                                  !field_reaches_guest(
+                                          view_, concept_control(view_, VehicleConcept::turn_right))
+                        : !field_reaches_guest(view_, name);
     }
 
     if (std::string_view(kind) == "tab") {
@@ -480,7 +484,7 @@ void Window::numeric(const char *label, const std::string &name, double divisor,
         } else {
             const auto raw = static_cast<std::uint64_t>(std::llround(encoded));
 
-            if ((name == "soc" && raw > 100) || (name == "speed10x" && (raw > 2550 || raw % 10))) {
+            if (!concept_raw_allowed(view_.platform, name, raw)) {
                 draft.error = "Ограничение профиля";
             } else if (client_.patch({{name, raw}})) {
                 draft.submitted = raw;
@@ -564,9 +568,12 @@ void Window::numeric(const char *label, const std::string &name, double divisor,
 
 void Window::checkbox(const char *label, const std::string &name, float width) {
     const bool hazard = name == "hazard";
-    const auto raw = value(hazard ? "turn_left" : name), other = hazard ? value("turn_right") : raw;
-    const bool delivered = hazard ? field_reaches_guest(view_, "turn_left") &&
-                                            field_reaches_guest(view_, "turn_right")
+    const auto left = concept_control(view_, VehicleConcept::turn_left),
+               right = concept_control(view_, VehicleConcept::turn_right);
+    const auto raw = control_value(view_, hazard ? left : name),
+               other = hazard ? control_value(view_, right) : raw;
+    const bool delivered = hazard ? field_reaches_guest(view_, left) &&
+                                            field_reaches_guest(view_, right)
                                   : field_reaches_guest(view_, name);
     const bool known = raw && other && *raw <= 1 && *other <= 1;
     const bool available = known && delivered;
@@ -586,8 +593,15 @@ void Window::checkbox(const char *label, const std::string &name, float width) {
     record_item(name, "checkbox");
 
     if (changed) {
-        client_.patch(hazard ? Json{{"turn_left", checked ? 0 : 1}, {"turn_right", checked ? 0 : 1}}
-                             : Json{{name, checked ? 0 : 1}});
+        const auto *binding = field_binding(view_.platform, name);
+        auto patch = hazard ? concept_patch(view_.platform, VehicleConcept::turn_left, !checked)
+                            : concept_patch(view_.platform, binding->id, !checked);
+
+        if (hazard) {
+            patch.update(concept_patch(view_.platform, VehicleConcept::turn_right, !checked));
+        }
+
+        client_.patch(patch);
     }
 
     auto *draw = ImGui::GetWindowDrawList();
@@ -871,13 +885,23 @@ void Window::editor() {
 
     if (section_ == 0) {
         position(0, 0);
-        numeric(tr("Скорость"), "speed", 1, 0, 0, 255, 1, true, movement_width, tr("км/ч"));
+        // The speed and the charge in the encoding of the field of the platform.
+        const auto numeric_concept = [&](const char *label, VehicleConcept id, double maximum,
+                                         const char *unit) {
+            const auto *binding = concept_binding(view_.platform, id);
+            const auto encoding = binding ? binding->fields.front().encoding : ConceptEncoding{};
+            numeric(label, concept_control(view_, id), 1 / encoding.resolution, encoding.offset, 0,
+                    maximum, 1, true, movement_width, unit);
+        };
+        numeric_concept(tr("Скорость"), VehicleConcept::speed, 255, tr("км/ч"));
         position(0, 1);
-        numeric(tr("Заряд"), "soc", 1, 0, 0, 100, 1, true, movement_width, "%");
+        numeric_concept(tr("Заряд"), VehicleConcept::charge, 100, "%");
         const auto column = wheel_layout();
         const auto radio = gear_radio(layout, column.choice_cell);
-        const auto gear = value("gear"), valid = value("gear_valid");
-        const bool gear_known = gear && valid && *valid == 1 && *gear < 4;
+        const auto gear_field = concept_control(view_, VehicleConcept::gear);
+        const auto gear = control_value(view_, gear_field),
+                   valid = control_value(view_, concept_control(view_, VehicleConcept::gear_valid));
+        const bool gear_known = gear && valid && *valid == 1 && *gear >= 0 && *gear < 4;
 
         if (!options_.capture_ui.empty()) {
             inspection_["radio_reference"] = {{"height_points", radio.height},
@@ -889,12 +913,14 @@ void Window::editor() {
                                               {"animation_seconds", MusicTabIndicator::duration}};
         }
 
-        ImGui::BeginDisabled(!field_reaches_guest(view_, "gear"));
+        ImGui::BeginDisabled(!field_reaches_guest(view_, gear_field));
 
         if (const int picked = choice("gear", radio, column.choice_cell, column.choice_font,
                                       gear_labels, gear_known ? int(*gear) : -1, gear_indicator_);
             picked >= 0) {
-            client_.patch({{"gear", picked}, {"gear_valid", 1}});
+            auto patch = concept_patch(view_.platform, VehicleConcept::gear, picked);
+            patch.update(concept_patch(view_.platform, VehicleConcept::gear_valid, 1));
+            client_.patch(patch);
         }
 
         ImGui::EndDisabled();
@@ -919,7 +945,8 @@ void Window::editor() {
         for (std::size_t i = 0; i < 2; ++i) {
             const auto c = layout.checkbox_column(i);
             ImGui::SetCursorScreenPos(ImVec2(c.x, layout.body.y + 1));
-            checkbox(i ? tr("Багажник") : tr("Капот"), i ? "tail_gate" : "hood");
+            checkbox(i ? tr("Багажник") : tr("Капот"),
+                     concept_control(view_, i ? VehicleConcept::tailgate : VehicleConcept::hood));
         }
 
         const float heading_y = layout.body.y + 36 * layout.form_scale() +
@@ -941,8 +968,12 @@ void Window::editor() {
             }
 
             const std::array<const char *, 4> labels = {tr("Передняя"), tr("Передняя"),
-                                                        tr("Задняя"), tr("Задняя")},
-                                              names = {"door_fl", "door_fr", "door_rl", "door_rr"};
+                                                        tr("Задняя"), tr("Задняя")};
+            const std::array<std::string, 4> names = {
+                    concept_control(view_, VehicleConcept::door_front_left),
+                    concept_control(view_, VehicleConcept::door_front_right),
+                    concept_control(view_, VehicleConcept::door_rear_left),
+                    concept_control(view_, VehicleConcept::door_rear_right)};
 
             for (std::size_t i = 0; i < 4; ++i) {
                 const auto c = layout.checkbox_column(i % 2);
@@ -954,8 +985,12 @@ void Window::editor() {
             }
         } else {
             const std::array<const char *, 4> labels = {tr("Передняя левая"), tr("Задняя левая"),
-                                                        tr("Передняя правая"), tr("Задняя правая")},
-                                              names = {"door_fl", "door_rl", "door_fr", "door_rr"};
+                                                        tr("Передняя правая"), tr("Задняя правая")};
+            const std::array<std::string, 4> names = {
+                    concept_control(view_, VehicleConcept::door_front_left),
+                    concept_control(view_, VehicleConcept::door_rear_left),
+                    concept_control(view_, VehicleConcept::door_front_right),
+                    concept_control(view_, VehicleConcept::door_rear_right)};
 
             for (std::size_t i = 0; i < 4; ++i) {
                 ImGui::SetCursorScreenPos(
@@ -970,8 +1005,13 @@ void Window::editor() {
             const std::array<const char *, 6> labels = {tr("Габариты"),    tr("Дневные огни"),
                                                         tr("Ближний"),     tr("Дальний"),
                                                         tr("Туман сзади"), tr("Аварийка")};
-            const std::array<const char *, 6> names = {"pos_lamp",  "bcm_DRLStatus", "low_beam",
-                                                       "high_beam", "rear_fog",      "hazard"};
+            const std::array<std::string, 6> names = {
+                    concept_control(view_, VehicleConcept::position_lamp),
+                    concept_control(view_, VehicleConcept::daytime_lamp),
+                    concept_control(view_, VehicleConcept::low_beam),
+                    concept_control(view_, VehicleConcept::high_beam),
+                    concept_control(view_, VehicleConcept::rear_fog),
+                    "hazard"};
 
             for (std::size_t i = 0; i < 6; ++i) {
                 const auto pair = layout.checkbox_column(i % 2);
@@ -991,7 +1031,9 @@ void Window::editor() {
                 const auto pair = layout.checkbox_column(i);
                 ImGui::SetCursorScreenPos(
                         ImVec2(pair.x, heading_y + heading_height + 6 * layout.form_scale()));
-                checkbox(i ? tr("Правый") : tr("Левый"), i ? "turn_right" : "turn_left",
+                checkbox(i ? tr("Правый") : tr("Левый"),
+                         concept_control(view_, i ? VehicleConcept::turn_right
+                                                  : VehicleConcept::turn_left),
                          pair.width);
             }
         } else {
@@ -999,9 +1041,13 @@ void Window::editor() {
                         gap = (layout.body.height - 6 * 26 - heading_height - 2) / 6;
             const std::array<const char *, 5> labels = {tr("Габариты"), tr("Ближний"),
                                                         tr("Дальний"), tr("Дневные огни"),
-                                                        tr("Туман сзади")},
-                                              names = {"pos_lamp", "low_beam", "high_beam",
-                                                       "bcm_DRLStatus", "rear_fog"};
+                                                        tr("Туман сзади")};
+            const std::array<std::string, 5> names = {
+                    concept_control(view_, VehicleConcept::position_lamp),
+                    concept_control(view_, VehicleConcept::low_beam),
+                    concept_control(view_, VehicleConcept::high_beam),
+                    concept_control(view_, VehicleConcept::daytime_lamp),
+                    concept_control(view_, VehicleConcept::rear_fog)};
 
             for (std::size_t i = 0; i < 5; ++i) {
                 ImGui::SetCursorScreenPos(
@@ -1017,7 +1063,9 @@ void Window::editor() {
             for (std::size_t i = 0; i < 2; ++i) {
                 const auto c = layout.column(2, i);
                 ImGui::SetCursorScreenPos(ImVec2(c.x, heading_y + heading_height + gap));
-                checkbox(i ? tr("Правый") : tr("Левый"), i ? "turn_right" : "turn_left");
+                checkbox(i ? tr("Правый") : tr("Левый"),
+                         concept_control(view_, i ? VehicleConcept::turn_right
+                                                  : VehicleConcept::turn_left));
             }
         }
     } else if (section_ == 3) {

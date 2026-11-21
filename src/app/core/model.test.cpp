@@ -372,7 +372,7 @@ int main(int argc, char **argv) try {
     }
 
     const auto normal = normal_initial_values(VehicleCatalog::qinggan09);
-    assert(normal.size() == 35);
+    assert(normal.size() == 51);
     auto initial = initial_state(VehicleCatalog::qinggan09);
     validate_state(initial);
     const auto &initial_raw = initial.at("raw_oem");
@@ -587,6 +587,127 @@ int main(int argc, char **argv) try {
     rejects([&] {
         apply_patch(initial, {{crc, 0}});
     });
+    // Each catalogue binds the shared concepts to its fields with the encoding of its OEM input.
+    using C = VehicleConcept;
+    const auto raw_of = [](const Json &state, const std::string &name) {
+        return state.at("raw_oem").at(name).get<std::uint64_t>();
+    };
+    const auto passion_field = [](VehicleConcept id) {
+        return concept_field(VehicleCatalog::passion, id);
+    };
+
+    for (const auto which :
+         {VehicleCatalog::qinggan09, VehicleCatalog::qinggan11, VehicleCatalog::passion}) {
+        for (const auto &binding : concept_bindings(which)) {
+            assert(binding.fields.front().role == ConceptRole::primary &&
+                   field_binding(which, binding.fields.front().field) == &binding &&
+                   concept_binding(which, binding.id) == &binding);
+        }
+
+        const auto state = initial_state(which);
+        assert(concept_value(state, C::speed) == 0 && concept_value(state, C::gear) == 0 &&
+               concept_value(state, C::gear_valid) == 1 && concept_value(state, C::charge) == 55 &&
+               concept_value(state, C::ignition) == 1 && concept_value(state, C::ready) == 1 &&
+               concept_value(state, C::door_front_left) == 0 &&
+               concept_value(state, C::hood) == 0 && concept_value(state, C::turn_left) == 0 &&
+               concept_value(state, C::belt_driver) == 0);
+    }
+
+    // The Qinggan encodings: raw values in the unit of the concept, speed10x in 0.1 km/h, the
+    // qinggan09 ACC set C::speed in 0.5 km/h, the qinggan11 one in km/h with 255 as no C::speed.
+    assert(concept_patch(VehicleCatalog::qinggan09, C::speed, 80) == Json({{"speed", 80}}) &&
+           concept_patch(VehicleCatalog::qinggan09, C::acc_target_speed, 80) ==
+                   Json({{"mrr_vSetDis", 160}}) &&
+           concept_patch(VehicleCatalog::qinggan11, C::acc_target_speed, 80) ==
+                   Json({{"ADCU_VsetDis", 80}}) &&
+           concept_patch(VehicleCatalog::qinggan11, C::steering_angle, 10).empty() &&
+           concept_field(VehicleCatalog::qinggan11, C::ready) == "ready_lamp");
+    assert(concept_value(apply_patch(initial, {{"mrr_vSetDis", 61}}), C::acc_target_speed) == 31 &&
+           !concept_value(apply_patch(platform_initial, {{"ADCU_VsetDis", 255}}),
+                          C::acc_target_speed));
+    assert(!concept_raw_allowed(VehicleCatalog::qinggan09, "soc", 101) &&
+           concept_raw_allowed(VehicleCatalog::qinggan09, "soc", 100) &&
+           !concept_raw_allowed(VehicleCatalog::qinggan09, "speed10x", 2555) &&
+           !concept_raw_allowed(VehicleCatalog::qinggan09, "speed10x", 2560) &&
+           concept_raw_allowed(VehicleCatalog::qinggan09, "speed10x", 2550) &&
+           concept_raw_allowed(VehicleCatalog::qinggan11, "vcu_ready", 0) &&
+           concept_raw_allowed(VehicleCatalog::qinggan09, "odo", 12345));
+    assert(concept_change(initial, C::door_front_left, 0).empty() &&
+           concept_change(initial, C::door_front_left, 1) == Json({{"door_fl", 1}}));
+    // The Passion encodings of the service table: VehicleSpeed in 0.01 km/h from -500 km/h with
+    // its copies and the chassis C::speed in 0.05625 km/h.
+    const auto display = passion_field(C::speed);
+    assert(display == vehicle_info + "VI_VehicleDisplaySpeed.VehicleSpeed" &&
+           raw_of(passion_initial, display) == 50000 &&
+           concept_patch(VehicleCatalog::passion, C::speed, 80) == Json({{display, 58000}}));
+    const auto moving = apply_patch(passion_initial,
+                                    concept_patch(VehicleCatalog::passion, C::speed, 80));
+    assert(concept_value(moving, C::speed) == 80 &&
+           raw_of(moving, vehicle_info + "VI_VehicleDisplaySpeed.VehicleSpeedAbs") == 58000 &&
+           raw_of(moving, vehicle_info + "VI_VehicleDisplaySpeed.VehicleSpeedDisp") == 58000 &&
+           raw_of(moving, "ChassisSysInfo.Notify_f_ChassisSysSts.ChassisSysSts."
+                          "CSS_VehicleSpeedMsg.VS_VehicleSpeed") == 1422);
+    rejects([&] {
+        apply_patch(passion_initial, {{display, 49999}});
+    });
+    rejects([&] {
+        apply_patch(passion_initial, {{display, 75501}});
+    });
+    // SOC in 0.1 %, at most 100 %.
+    assert(concept_patch(VehicleCatalog::passion, C::charge, 73) ==
+                   Json({{passion_field(C::charge), 730}}) &&
+           !concept_raw_allowed(VehicleCatalog::passion, passion_field(C::charge), 1001));
+    assert(concept_value(apply_patch(passion_initial, {{passion_field(C::charge), 555}}),
+                         C::charge) == 56);
+    rejects([&] {
+        apply_patch(passion_initial, {{passion_field(C::charge), 1001}});
+    });
+    // AG_ActualGear P, R, N, D with 255 invalid; the target C::gear follows.
+    const auto drive = apply_patch(passion_initial,
+                                   concept_patch(VehicleCatalog::passion, C::gear, 3));
+    assert(concept_value(drive, C::gear) == 3 &&
+           raw_of(drive, vehicle_info + "VI_TargetGear.TG_TargetGear") == 3 &&
+           !concept_value(apply_patch(passion_initial, {{passion_field(C::gear), 255}}), C::gear));
+    // OnOffSts 1 OFF and 2 ON with 0 the default; PowerMode 1 OFF, 2 and 3 ON.
+    assert(raw_of(passion_initial, passion_field(C::ready)) == 2 &&
+           raw_of(passion_initial, passion_field(C::ignition)) == 2 &&
+           concept_patch(VehicleCatalog::passion, C::ready, 0) ==
+                   Json({{passion_field(C::ready), 1}}) &&
+           !concept_value(apply_patch(passion_initial, {{passion_field(C::ready), 0}}), C::ready) &&
+           concept_value(apply_patch(passion_initial, {{passion_field(C::ignition), 3}}),
+                         C::ignition) == 1);
+    const auto turning = apply_patch(passion_initial,
+                                     concept_patch(VehicleCatalog::passion, C::turn_left, 1));
+    const std::string turn_lamps =
+            "TurnLampService.Notify_f_TrunLampSts.TrunLampSts.TrunLampSts.TrunLamp";
+
+    for (const auto *side : {"FL", "ML", "RL", "RML"}) {
+        assert(raw_of(turning, turn_lamps + "ActualSts." + side + "_TurnLampActualSts") == 2);
+    }
+
+    assert(raw_of(turning, turn_lamps + "LogicSts.RL_TurnLampLogicSts") == 2 &&
+           raw_of(turning, turn_lamps + "ActualSts.FR_TurnLampActualSts") == 1 &&
+           concept_value(turning, C::turn_right) == 0);
+    // SeatBelt 0 UNTIED and 1 TIED; the concept is 1 for an unbuckled seat.
+    assert(raw_of(passion_initial, passion_field(C::belt_rear_middle)) == 1 &&
+           concept_patch(VehicleCatalog::passion, C::belt_driver, 1) ==
+                   Json({{passion_field(C::belt_driver), 0}}));
+    // eps_sasSteeringAngle in 0.1 degree from -1000 degrees; ACC_TargetSpeed_kph with 255 invalid.
+    assert(raw_of(passion_initial, passion_field(C::steering_angle)) == 10000 &&
+           concept_patch(VehicleCatalog::passion, C::steering_angle, -455) ==
+                   Json({{passion_field(C::steering_angle), 9545}}) &&
+           concept_value(apply_patch(passion_initial, {{passion_field(C::steering_angle), 10455}}),
+                         C::steering_angle) == 455 &&
+           concept_value(passion_initial, C::acc_target_speed) == 0 &&
+           !concept_value(apply_patch(passion_initial, {{passion_field(C::acc_target_speed), 255}}),
+                          C::acc_target_speed));
+    // LvBattVoltage declares a 3..8 V range unlike a 12 V battery and stays unbound.
+    assert(concept_patch(VehicleCatalog::passion, C::battery_voltage, 1240).empty() &&
+           !concept_value(passion_initial, C::battery_voltage));
+    assert(concept_encode({0.05625, 0, {}, {}}, 80, 16) == 1422 &&
+           !concept_encode({0.01, -500, {}, {}}, -501, 32) &&
+           concept_decode({1, 0, {{0, 1}, {1, 2}}, 255}, 2) == 1.0 &&
+           !concept_decode({1, 0, {{0, 1}, {1, 2}}, 255}, 255));
     auto speed = apply_patch(initial, {{"speed", 65}, {"soc", 73}});
     assert(speed["raw_oem"]["speed10x"] == 650);
     auto raw = apply_patch(speed, {{"speed10x", 900}, {"gear", 255}});

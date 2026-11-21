@@ -152,6 +152,21 @@ int main() try {
         auto none = press("cruise_up");
         assert(none.receipt["reason"] == "no-remembered-target" && none.patch.empty());
     }
+    // The Passion catalogue has no Qinggan ADAS configuration, so its ACC stays disabled; an odd
+    // qinggan09 set speed in 0.5 km/h is no whole km/h target.
+    {
+        AdasEcu passion;
+        Json car = apply_patch(initial_state(VehicleCatalog::passion),
+                               concept_patch(VehicleCatalog::passion, VehicleConcept::speed, 80));
+        assert(passion.input(car, 1, "acc", "down", "ui-p", now).handled);
+        auto up = passion.input(car, 2, "acc", "up", "ui-p", now + 100ms);
+        assert(up.receipt["reason"] == "acc-feature-disabled" && up.patch.empty());
+        AdasEcu odd;
+        Json half = apply_patch(ready, {{"acc_mode", 3}, {"mrr_vSetDis", 161}});
+        assert(odd.input(half, 1, "cruise_up", "down", "ui-o", now).handled);
+        assert(odd.input(half, 2, "cruise_up", "up", "ui-o", now + 100ms).receipt["reason"] ==
+               "target-outside-policy");
+    }
     std::cout
             << "ADAS physical phases, telemetry encoding, readiness, replay/owner/cancel, limits and recovery passed\n";
 } catch (const std::exception &error) {

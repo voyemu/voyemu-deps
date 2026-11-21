@@ -13,9 +13,9 @@ public:
 
     bool update(const Json &logical, Clock::time_point now) {
         const auto source = logical.at("sequence").get<std::uint32_t>();
-        const auto &raw = logical.at("raw_oem");
-        const unsigned requested = raw.at("turn_left").get<unsigned>() |
-                                   (raw.at("turn_right").get<unsigned>() << 1);
+        const unsigned requested =
+                (concept_value(logical, VehicleConcept::turn_left) == 1 ? 1U : 0U) |
+                (concept_value(logical, VehicleConcept::turn_right) == 1 ? 2U : 0U);
 
         if (requested != requested_) {
             requested_ = requested;
@@ -43,8 +43,14 @@ public:
 
         state_ = logical;
         state_["sequence"] = sequence;
-        state_["raw_oem"]["turn_left"] = lamps & 1;
-        state_["raw_oem"]["turn_right"] = (lamps >> 1) & 1;
+
+        if (requested) {
+            const auto catalog = state_catalog(logical);
+            concept_assign(catalog, state_["raw_oem"], VehicleConcept::turn_left, lamps & 1);
+            concept_assign(catalog, state_["raw_oem"], VehicleConcept::turn_right,
+                           (lamps >> 1) & 1);
+        }
+
         source_ = source;
         lamps_ = lamps;
 

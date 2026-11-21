@@ -94,6 +94,30 @@ int main() try {
     state = apply_patch(state, {{"ign", 0}});
     power.observe(state);
     check(power.state() == State::acc, "raw ign off keeps the multimedia on");
+
+    // On Passion the states set PowerMode and LD_ReadyLamp; its battery voltage stays unbound.
+    PowerEcu passion;
+    auto car = initial_state(VehicleCatalog::passion);
+    const auto mode = concept_field(VehicleCatalog::passion, VehicleConcept::ignition),
+               lamp = concept_field(VehicleCatalog::passion, VehicleConcept::ready);
+    passion.observe(car);
+    check(passion.state() == State::ready, "the Passion model starts at READY");
+    const auto on = passion.request(car, State::on);
+    check(on.patch == Json{{lamp, 1}}, "ON switches LD_ReadyLamp to OFF only");
+    car = apply_patch(car, on.patch);
+    const auto off = passion.request(car, State::off);
+    check(off.patch == Json{{mode, 1}}, "OFF sets PowerMode OFF");
+    car = apply_patch(car, off.patch);
+    passion.observe(car);
+    check(passion.state() == State::off, "a switched off Passion model stays OFF");
+    car = apply_patch(car, passion.request(car, State::on).patch);
+    car = apply_patch(car, concept_patch(VehicleCatalog::passion, VehicleConcept::speed, 40));
+    check(passion.request(car, State::off).receipt.at("reason") == "vehicle-moving",
+          "a moving Passion vehicle stays on");
+    car = apply_patch(car, concept_patch(VehicleCatalog::passion, VehicleConcept::speed, 0));
+    car = apply_patch(car, concept_patch(VehicleCatalog::passion, VehicleConcept::gear, 3));
+    check(passion.request(car, State::ready).receipt.at("reason") == "gear-not-park-or-neutral",
+          "Passion READY needs P or N");
     std::cout << "power ECU: states, fields, rules, cold start and raw writes PASS\n";
 
     return 0;

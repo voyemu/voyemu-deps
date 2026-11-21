@@ -6,9 +6,9 @@
 #include <string_view>
 
 namespace voyemu {
-// Own power policy of the vehicle: one state OFF/ACC/ON/READY that sets ign, ready_lamp and the
-// 12 V battery voltage of the model for both guests and the ACC of the multimedia CAN model. Not a
-// recovered OEM BCM protocol.
+// Own power policy of the vehicle: one state OFF/ACC/ON/READY that sets the ignition, READY and
+// 12 V battery voltage concepts of the model for both guests and the ACC of the multimedia CAN
+// model. Not a recovered OEM BCM protocol.
 class PowerEcu {
 public:
     enum class State {
@@ -49,10 +49,8 @@ public:
     // The state of a model whose power fields a writer set directly. With ign off a vehicle that
     // was not switched off keeps the multimedia on.
     void observe(const Json &state) {
-        const auto &raw = state.at("raw_oem");
-
-        if (raw.at("ign") == 1) {
-            state_ = raw.at("ready_lamp") == 1 ? State::ready : State::on;
+        if (concept_value(state, VehicleConcept::ignition) == 1) {
+            state_ = concept_value(state, VehicleConcept::ready) == 1 ? State::ready : State::on;
         } else if (state_ != State::off) {
             state_ = State::acc;
         }
@@ -60,7 +58,6 @@ public:
 
     // READY needs the gear in P or N; a moving vehicle stays at ON or above.
     Outcome request(const Json &state, State target) {
-        const auto &raw = state.at("raw_oem");
         const auto previous = state_;
         Outcome result;
 
@@ -70,10 +67,13 @@ public:
                           {"previous", name(previous)}};
         std::string reason;
 
-        if (target == State::ready &&
-            (raw.at("gear_valid") != 1 || (raw.at("gear") != gear_p && raw.at("gear") != gear_n))) {
+        const auto gear = concept_value(state, VehicleConcept::gear);
+
+        if (target == State::ready && (concept_value(state, VehicleConcept::gear_valid) != 1 ||
+                                       (gear != gear_p && gear != gear_n))) {
             reason = "gear-not-park-or-neutral";
-        } else if (target < State::on && raw.at("spd_valid") == 1 && raw.at("speed") != 0) {
+        } else if (target < State::on && concept_value(state, VehicleConcept::speed_valid) == 1 &&
+                   concept_value(state, VehicleConcept::speed) != 0) {
             reason = "vehicle-moving";
         }
 
@@ -82,7 +82,7 @@ public:
         } else {
             state_ = target;
             held_.reset();
-            result.patch = fields(raw);
+            result.patch = fields(state);
             result.receipt["outcome"] = "applied";
         }
 
@@ -93,7 +93,6 @@ public:
 
     // The cold start of a cluster holds ON or READY at ACC until the startup releases it.
     Outcome startup(const Json &state, bool ignition, const std::string &reason) {
-        const auto &raw = state.at("raw_oem");
         const auto previous = state_;
 
         if (!ignition && state_ >= State::on) {
@@ -105,7 +104,7 @@ public:
         }
 
         Outcome result;
-        result.patch = fields(raw);
+        result.patch = fields(state);
         result.receipt = {{"consumer", "voyemu.power-ecu"},
                           {"policy_id", "voyemu-own-power-v1"},
                           {"requested", ignition ? "startup-release" : "startup-hold"},
@@ -125,27 +124,19 @@ public:
 private:
     static constexpr std::array<std::string_view, 4> names{"off", "acc", "on", "ready"};
     // cluster_ui_controls gear_labels: P, R, N, D.
-    static constexpr unsigned gear_p = 0, gear_n = 2;
-    // ic_bat_voltage in 0.01 V, the unit of the OEM powermgr voltage levels, whose normal band is
-    // 9.00-16.00 V: a resting battery, and the DC-DC converter charging it at READY.
-    static constexpr unsigned battery_rest = 1240, battery_charging = 1380;
+    static constexpr std::int64_t gear_p = 0, gear_n = 2;
+    // The battery voltage in 0.01 V, the unit of the OEM powermgr voltage levels, whose normal band
+    // is 9.00-16.00 V: a resting battery, and the DC-DC converter charging it at READY.
+    static constexpr std::int64_t battery_rest = 1240, battery_charging = 1380;
 
-    Json fields(const Json &raw) const {
-        const unsigned ign = state_ >= State::on ? 1 : 0, ready = state_ == State::ready ? 1 : 0;
-        Json patch = Json::object();
+    // The changed primary fields; a concept the catalogue does not bind stays out.
+    Json fields(const Json &state) const {
+        const bool ready = state_ == State::ready;
+        auto patch = concept_change(state, VehicleConcept::ignition, state_ >= State::on ? 1 : 0);
 
-        if (raw.at("ign") != ign) {
-            patch["ign"] = ign;
-        }
-
-        if (raw.at("ready_lamp") != ready) {
-            patch["ready_lamp"] = ready;
-        }
-
-        if (const auto voltage = ready ? battery_charging : battery_rest;
-            raw.at("ic_bat_voltage") != voltage) {
-            patch["ic_bat_voltage"] = voltage;
-        }
+        patch.update(concept_change(state, VehicleConcept::ready, ready ? 1 : 0));
+        patch.update(concept_change(state, VehicleConcept::battery_voltage,
+                                    ready ? battery_charging : battery_rest));
 
         return patch;
     }

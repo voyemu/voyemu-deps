@@ -1580,10 +1580,7 @@ struct Backend::Impl {
             append(out.payload, guest.at(f.name).get<U>());
         }
 
-        need(raw.at("speed").get<U>() <= 255 &&
-                     raw.at("speed10x").get<U>() == raw.at("speed").get<U>() * 10 &&
-                     raw.at("soc").get<U>() <= 100,
-             "Consistent speed/SOC required");
+        need(concepts_consistent(catalog, raw), "Consistent speed/SOC required");
 
         if (seq <= a[0]) {
             return {0, {}, out.name};

@@ -55,6 +55,20 @@ int main() try {
     }
 
     check(rejected, "sequence wrap rejected");
+    // On Passion the projection blinks every turn lamp status the concept binds.
+    BodyEcu passion;
+    auto car = apply_patch(initial_state(VehicleCatalog::passion),
+                           concept_patch(VehicleCatalog::passion, VehicleConcept::turn_left, 1));
+    const std::string lamps =
+            "TurnLampService.Notify_f_TrunLampSts.TrunLampSts.TrunLampSts.TrunLamp";
+    check(passion.update(car, now) &&
+                  passion.state()["raw_oem"][lamps + "ActualSts.RL_TurnLampActualSts"] == 2,
+          "Passion turn lamps lit");
+    check(passion.update(car, now + std::chrono::milliseconds(500)) &&
+                  passion.state()["raw_oem"][lamps + "ActualSts.RL_TurnLampActualSts"] == 1 &&
+                  passion.state()["raw_oem"][lamps + "LogicSts.FL_TurnLampLogicSts"] == 1 &&
+                  car["raw_oem"][lamps + "ActualSts.RL_TurnLampActualSts"] == 2,
+          "Passion turn lamps dark in the projection only");
     std::cout << "body ECU projection passed\n";
 } catch (const std::exception &error) {
     std::cerr << error.what() << '\n';

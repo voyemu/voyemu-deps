@@ -557,6 +557,29 @@ bool field_reaches_guest(const ViewState &state, const std::string &name) {
     return !state.model_only.contains(name);
 }
 
+std::string concept_control(const ViewState &state, VehicleConcept id) {
+    const auto field = concept_field(state.platform, id);
+
+    return field.empty() ? std::string(concept_definition(id).name) : field;
+}
+
+std::optional<std::int64_t> control_value(const ViewState &state, const std::string &name) {
+    if (!state.raw.contains(name)) {
+        return std::nullopt;
+    }
+
+    const auto raw = state.raw.at(name).get<std::uint64_t>();
+    const auto *binding = field_binding(state.platform, name);
+
+    if (!binding || binding->fields.front().field != name) {
+        return static_cast<std::int64_t>(raw);
+    }
+
+    const auto decoded = concept_decode(binding->fields.front().encoding, raw);
+
+    return decoded ? std::optional<std::int64_t>(std::llround(*decoded)) : std::nullopt;
+}
+
 bool wheel_action_available(const ViewState &state, std::string_view id) {
     const auto family = state.deliveries.value("android", Json::object())
                                 .value("presentation_family", std::string{});
@@ -833,6 +856,7 @@ void Client::ingest(const Json &response) {
     state_.raw = raw;
     state_.catalog = catalog;
     state_.model_only = std::move(model_only);
+    state_.platform = state_catalog(response.at("state"));
     state_.deliveries = response.value("deliveries", Json::object());
     state_.routes = response.value("wheel_routes", Json::object());
     state_.wheel_capability = response.value("wheel_capability", Json::object());

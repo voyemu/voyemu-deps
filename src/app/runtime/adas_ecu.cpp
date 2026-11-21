@@ -2,14 +2,16 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <cmath>
 
 namespace voyemu {
 namespace {
 constexpr std::array<std::string_view, 6> buttons{"ica",       "acc",         "distance",
                                                   "cruise_up", "cruise_down", "cancel"};
-constexpr unsigned minimum_speed = 30, maximum_speed = 130;
+constexpr std::int64_t minimum_speed = 30, maximum_speed = 130;
 
-// A field the catalogue of the platform lacks reads 0 and is never written.
+// The ADAS status and configuration fields of the Qinggan catalogues; a field the catalogue of the
+// platform lacks reads 0 and is never written, so a catalogue without cfg_acc keeps ACC disabled.
 unsigned raw(const Json &state, const char *key) {
     const auto &values = state.at("raw_oem");
 
@@ -20,8 +22,9 @@ bool known(const Json &state) {
     return raw(state, "acc_mode") <= 5 && raw(state, "mpc_icaSts") <= 3;
 }
 
-bool valid_target(unsigned encoded) {
-    return encoded % 2 == 0 && encoded >= 2 * minimum_speed && encoded <= 2 * maximum_speed;
+// A whole km/h set speed within the policy; 0 is no remembered speed.
+bool valid_target(double kmh) {
+    return kmh == std::round(kmh) && kmh >= minimum_speed && kmh <= maximum_speed;
 }
 
 std::string readiness(const Json &state, bool ica) {
@@ -33,11 +36,12 @@ std::string readiness(const Json &state, bool ica) {
         return "ica-feature-disabled";
     }
 
-    if (raw(state, "gear_valid") != 1 || raw(state, "gear") != 3) {
+    if (concept_value(state, VehicleConcept::gear_valid) != 1 ||
+        concept_value(state, VehicleConcept::gear) != 3) {
         return "gear-not-drive";
     }
 
-    if (raw(state, "ready_lamp") != 1) {
+    if (concept_value(state, VehicleConcept::ready) != 1) {
         return "vehicle-not-ready";
     }
 
@@ -45,8 +49,10 @@ std::string readiness(const Json &state, bool ica) {
         return "brake-pressed";
     }
 
-    if (!raw(state, "spd_valid") || raw(state, "speed") < minimum_speed ||
-        raw(state, "speed") > maximum_speed) {
+    const auto speed = concept_value(state, VehicleConcept::speed);
+
+    if (concept_value(state, VehicleConcept::speed_valid).value_or(0) == 0 || !speed ||
+        *speed < minimum_speed || *speed > maximum_speed) {
         return "speed-outside-policy";
     }
 
@@ -59,29 +65,22 @@ void changed(Json &patch, const Json &state, const char *name, unsigned value) {
     }
 }
 
-// The set speed in 0.5 km/h, the encoding of qinggan09 mrr_vSetDis. qinggan11 sends ADCU_VsetDis in
-// whole km/h with 255 as invalid: the OEM 7.3.1 dataprocesser_interface_ACC_speed shows 255 and a
-// CAN timeout as no speed and clamps every other value to 20..150 km/h.
-constexpr unsigned qinggan11_target_invalid = 255;
+// The ACC set speed in km/h, which each catalogue encodes in its own field; no speed is 0.
+double target_of(const Json &state) {
+    const auto *binding = concept_binding(state_catalog(state), VehicleConcept::acc_target_speed);
 
-unsigned target_of(const Json &state) {
-    const auto &values = state.at("raw_oem");
-
-    if (values.contains("mrr_vSetDis")) {
-        return raw(state, "mrr_vSetDis");
+    if (!binding) {
+        return 0;
     }
 
-    const auto kmh = raw(state, "ADCU_VsetDis");
+    const auto &field = binding->fields.front();
 
-    return kmh == qinggan11_target_invalid ? 0 : kmh * 2;
+    return concept_decode(field.encoding, state.at("raw_oem").at(field.field).get<std::uint64_t>())
+            .value_or(0);
 }
 
-void set_target(Json &patch, const Json &state, unsigned encoded) {
-    if (state.at("raw_oem").contains("mrr_vSetDis")) {
-        changed(patch, state, "mrr_vSetDis", encoded);
-    } else {
-        changed(patch, state, "ADCU_VsetDis", encoded / 2);
-    }
+void set_target(Json &patch, const Json &state, std::int64_t kmh) {
+    patch.update(concept_change(state, VehicleConcept::acc_target_speed, kmh));
 }
 
 Json base_receipt(const Json &state) {
@@ -196,7 +195,8 @@ AdasOutcome AdasEcu::input(const Json &state, std::uint32_t sequence, std::strin
         return result;
     }
 
-    auto acc = raw(state, "acc_mode"), ica = raw(state, "mpc_icaSts"), target = target_of(state);
+    auto acc = raw(state, "acc_mode"), ica = raw(state, "mpc_icaSts");
+    const auto target = target_of(state);
 
     if (id == "cancel") {
         changed(result.patch, state, "acc_mode", 0);
@@ -238,7 +238,7 @@ AdasOutcome AdasEcu::input(const Json &state, std::uint32_t sequence, std::strin
         changed(result.patch, state, "mpc_icaSts", requested_ica ? (active ? 3 : 2) : 1);
 
         if (active) {
-            set_target(result.patch, state, raw(state, "speed") * 2);
+            set_target(result.patch, state, *concept_value(state, VehicleConcept::speed));
         }
 
         if (raw(state, "time_gap_set") == 0) {
@@ -271,16 +271,17 @@ AdasOutcome AdasEcu::input(const Json &state, std::uint32_t sequence, std::strin
             return result;
         }
 
-        auto step = long_press ? 10u : 2u;
+        const auto kmh = std::llround(target);
+        const std::int64_t step = long_press ? 5 : 1;
 
-        if ((id == "cruise_up" && target > 2 * maximum_speed - step) ||
-            (id == "cruise_down" && target < 2 * minimum_speed + step)) {
+        if ((id == "cruise_up" && kmh > maximum_speed - step) ||
+            (id == "cruise_down" && kmh < minimum_speed + step)) {
             finish(result, state, "no-change", "target-bound");
 
             return result;
         }
 
-        set_target(result.patch, state, id == "cruise_up" ? target + step : target - step);
+        set_target(result.patch, state, id == "cruise_up" ? kmh + step : kmh - step);
     } else if (id == "cruise_up") {
         if (!valid_target(target)) {
             finish(result, state, "no-change", "no-remembered-target");
