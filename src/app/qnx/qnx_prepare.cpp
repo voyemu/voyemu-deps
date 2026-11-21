@@ -19,6 +19,7 @@
 #include "qnx_passion.hpp"
 #include "qnx_passion_platform.hpp"
 #include "qnx_passion_smem.hpp"
+#include "qnx_passion_someip.hpp"
 #include "qnx_qinggan11.hpp"
 #include "qnx_runtime_layout.hpp"
 #include "qnx_startup.hpp"
@@ -940,6 +941,16 @@ Json prepare_qnx_passion_developer_images(const std::filesystem::path &root,
     const auto network = qnx_passion_network_script(
             read_qnx6_file(files.at("system_la.img"), originals[2].sha, "scripts/startup.sh"),
             qnx_interguest_contract().at("address").get<std::string>());
+    // The vehicle gateway contract: the cluster's SOME/IP clients and the service table the Passion
+    // catalogue is generated from.
+    const auto service_table =
+            read_qnx6_file(files.at("system_la.img"), originals[2].sha,
+                           "etc/exd/adapter_config/signaldefine/S32G_8155/8155_qnx/"
+                           "H53_SOMEIP_ServiceTable_V6.0.0_OIB_8155_QNX_20240103-142433.json");
+    need(sha256_bytes(service_table) == passion_map_sha256, "QNX_PASSION_SERVICE_TABLE");
+    const auto gateway = qnx_passion_someip_contract(
+            read_qnx6_file(files.at("system_la.img"), originals[2].sha, "usr/bin/ic_service"),
+            Json::parse(service_table));
     // Our RAM device carries exactly the extent fs-qnx6 accepts (blocksize*blocks + the 0x3000
     // header and the 0x1000 alternate pair), so the capacity is pinned at this call site rather
     // than in the shared contract.
@@ -957,6 +968,7 @@ Json prepare_qnx_passion_developer_images(const std::filesystem::path &root,
     const auto placement = qnx_passion_11713_placement();
     need(std::filesystem::create_directory(output), "QNX_PASSION_DEVELOPER_CREATE");
     ensure_private_directory(output);
+    write_private_json(output / "someip-gateway.json", gateway);
     const auto guest = build_qnx_guest_modules(
             root, read_qnx_imagefs_file(host, "lib64/libc.so.4"),
             read_qnx_imagefs_file(display, "lib64/libscreen.so.1"), output / "guest", true,
@@ -1172,6 +1184,7 @@ Json prepare_qnx_passion_developer_images(const std::filesystem::path &root,
             {"memory_mib", 11713},
             {"runtime_sha256", sha256_bytes(runtime)},
             {"network_script_sha256", sha256_bytes(network)},
+            {"someip_gateway_sha256", sha256_file(output / "someip-gateway.json")},
             {"source_capture", 1},
             {"logical_ifs_bytes", ifs.size()},
             {"gpt_block_bytes", 4096},

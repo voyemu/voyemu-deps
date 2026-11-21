@@ -109,7 +109,8 @@ int main() {
           {"name":"NotifyCycle_f_PowerMode_VMM","event":32771,"eventgroups":[16384],"bytes":2,"e2e":false,
            "fields":[{"name":"PowerMode","offset":0,"bytes":1}]}]}]})"));
     auto state = [](std::uint64_t speed) {
-        return Json{{"raw_oem",
+        return Json{{"map_sha256", passion_map_sha256},
+                    {"raw_oem",
                      {{"VehicleSpeed", speed},
                       {"VehicleDrivingInfo.Notify_f_VehicleDrivingInform.VehicleInform.E2E_Header."
                        "E2E_Counter",
@@ -185,6 +186,18 @@ int main() {
     assert(frames.size() == 1 && get(udp_payload(frames[0]), 2, 2) == 0x8001);
     frames = drain(gateway, now + std::chrono::seconds(6));
     assert(gateway.subscriptions() == 0 && frames.size() == 2);
+    // Only a Passion catalogue state is applied.
+    auto other = state(1);
+    other["map_sha256"] = qinggan09_map_sha256;
+    bool refused = false;
+
+    try {
+        gateway.apply(other);
+    } catch (const std::exception &) {
+        refused = true;
+    }
+
+    assert(refused);
     // Frames for other VLANs, untagged frames and garbage are ignored.
     gateway.receive(Bytes(10, 0), now);
     gateway.receive(Bytes(64, 0xff), now);

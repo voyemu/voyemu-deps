@@ -53,8 +53,9 @@ public:
     void receive(std::span<const std::uint8_t> frame, Clock::time_point now);
     // The next frame for the guest, if one is due.
     bool next(std::vector<std::uint8_t> &frame, Clock::time_point now);
-    // Raw catalogue values of a vehicle state (raw_oem); changed events are sent at once. Returns
-    // the number of changed fields. The E2E header is the gateway's own.
+    // Raw values of a Passion catalogue state (raw_oem); the wire carries them unchanged and a
+    // changed event is sent at once. Returns the number of changed fields. The E2E header is the
+    // gateway's.
     unsigned apply(const Json &state);
     std::size_t subscriptions() const;
 

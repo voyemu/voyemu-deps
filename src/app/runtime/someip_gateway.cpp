@@ -175,8 +175,9 @@ std::size_t SomeipGateway::subscriptions() const {
 }
 
 unsigned SomeipGateway::apply(const Json &state) {
-    if (!state.is_object() || !state.contains("raw_oem") || !state.at("raw_oem").is_object()) {
-        throw VoyemuError("SOMEIP_STATE", "vehicle state with raw_oem values required");
+    if (!state.is_object() || state.value("map_sha256", std::string{}) != passion_map_sha256 ||
+        !state.contains("raw_oem") || !state.at("raw_oem").is_object()) {
+        throw VoyemuError("SOMEIP_STATE", "Passion catalogue state required");
     }
 
     const auto &raw = state.at("raw_oem");
