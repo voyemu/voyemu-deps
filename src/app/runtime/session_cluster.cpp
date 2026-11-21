@@ -515,7 +515,7 @@ void Session::attach_cluster(const Json &input, std::optional<unsigned> seconds,
 
     if (qnx_checkpoint_.resume) {
         model_.advance_revision(qnx_checkpoint_.state_sequence);
-        write_private_json(directory_ / "vehicle-state.json", model_.state());
+        write_private_json(directory_ / "vehicle-state.json", model_.state(), vehicle_state_bytes);
         theme_sequence_ = std::max(theme_sequence_, qnx_checkpoint_.theme_sequence);
     }
 
@@ -1273,7 +1273,7 @@ void Session::publish_qnx_input() {
     }
 
     if (body_.update(model_.state(), std::chrono::steady_clock::now())) {
-        write_private_json(directory_ / "mcu-state.json", body_.state());
+        write_private_json(directory_ / "mcu-state.json", body_.state(), vehicle_state_bytes);
     }
 
     auto ack_path = directory_ / "wheel-ack.json";

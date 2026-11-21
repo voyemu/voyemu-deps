@@ -385,7 +385,7 @@ voyemu::Json startup_vehicle_state(const Arguments &args) {
                             "; use fresh scenario or provide a saved vehicle scenario before explicit resume");
         }
 
-        saved = voyemu::read_private_json(path);
+        saved = voyemu::read_private_json(path, voyemu::vehicle_state_bytes);
     }
 
     return voyemu::select_vehicle_startup(
@@ -420,7 +420,7 @@ int supervise(Arguments args, const std::filesystem::path &current_program) {
         throw VoyemuError("VEHICLE_STARTUP", "fresh session working path required");
     }
 
-    voyemu::write_private_json(working, selected);
+    voyemu::write_private_json(working, selected, voyemu::vehicle_state_bytes);
     auto owned_session = voyemu::Session::for_machine_start(args.session, args.token,
                                                             current_program);
     auto &session = *owned_session;

@@ -1293,7 +1293,8 @@ Json Api::control(const Json &request, const Json &operation, bool mutation, int
                         record.at("session_id").get<std::string>() &&
                 terminal.value("stopped", false)) {
                 terminal["ok"] = true;
-                terminal["state"] = read_private_json(directory / "vehicle-state.json");
+                terminal["state"] = read_private_json(directory / "vehicle-state.json",
+                                                      vehicle_state_bytes);
                 terminal["held_buttons"] = 0;
                 terminal["wheel_routes"] = nullptr;
                 terminal["observation_source"] = "owned terminal runtime record";
@@ -1733,10 +1734,7 @@ Json Api::dispatch_catalog(const std::string &op, const Json &request, Clock::ti
         for (auto &field : fields) {
             auto name = field.at("name").get<std::string>();
             field["minimum"] = 0;
-            field["maximum"] =
-                    field.at("width").get<unsigned>() == 32
-                            ? UINT32_MAX
-                            : ((std::uint64_t{1} << field.at("width").get<unsigned>()) - 1);
+            field["maximum"] = field_maximum(field.at("width").get<unsigned>());
 
             if (name == "soc") {
                 field["maximum"] = 100;

@@ -302,7 +302,8 @@ Json Session::handle(const Json &operation) {
             startup_ignition_.observe_patch(values);
             model_.patch(values);
             power_.observe(model_.state());
-            write_private_json(directory_ / "vehicle-state.json", model_.state());
+            write_private_json(directory_ / "vehicle-state.json", model_.state(),
+                               vehicle_state_bytes);
             schedule_android_state(before.get<std::uint32_t>());
 
             if (cluster_requested_) {

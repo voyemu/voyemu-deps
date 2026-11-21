@@ -468,7 +468,7 @@ int main(int argc, char **argv) try {
     const auto &platform = catalog(VehicleCatalog::qinggan11);
     assert(platform.size() == 736 && vehicle_catalog("qinggan11") == VehicleCatalog::qinggan11 &&
            vehicle_catalog("qinggan09") == VehicleCatalog::qinggan09 &&
-           vehicle_catalog("passion") == VehicleCatalog::qinggan09);
+           vehicle_catalog("passion") == VehicleCatalog::passion);
     rejects([] {
         vehicle_catalog("unknown");
     });
@@ -528,6 +528,64 @@ int main(int argc, char **argv) try {
     assert(wide["raw_oem"]["reserved_04"] == 0x3fffffffffULL);
     rejects([&] {
         apply_patch(platform_initial, {{"reserved_04", 0x4000000000ULL}});
+    });
+    // The Passion catalogue holds the 1598 cluster input signals of the OEM SOME/IP service table,
+    // numbered from 1, each with its table declaration; values stay raw wire integers.
+    const auto &passion = catalog(VehicleCatalog::passion);
+    const auto passion_signals = catalog_signals(VehicleCatalog::passion);
+    assert(passion.size() == 1598 && passion_signals.size() == passion.size() &&
+           catalog_signals(VehicleCatalog::qinggan11).empty());
+    std::set<std::string> passion_names;
+
+    for (std::size_t i = 0; i < passion.size(); ++i) {
+        assert(passion[i].index == i + 1 && passion_names.insert(passion[i].name).second &&
+               !passion[i].name.starts_with("8155QNX.") && passion[i].width % 8 == 0 &&
+               passion[i].width <= 64 && passion[i].initial <= field_maximum(passion[i].width));
+    }
+
+    const auto signal_of = [&](std::string_view name) {
+        const auto *field = catalog_field(VehicleCatalog::passion, name);
+        assert(field && &passion[field->index - 1] == field);
+
+        return passion_signals[field->index - 1];
+    };
+    const std::string vehicle_info =
+            "VehicleDrivingInfo.Notify_f_VehicleDrivingInform.VehicleInform.VehicleInform.";
+    const auto display_speed = signal_of(vehicle_info + "VI_VehicleDisplaySpeed.VehicleSpeed");
+    assert(display_speed.id == 212 && display_speed.type == "uint32" &&
+           display_speed.resolution == 0.01 && display_speed.offset == -500.0 &&
+           display_speed.unit == "kmph" && display_speed.options.empty() &&
+           catalog_field(VehicleCatalog::passion,
+                         vehicle_info + "VI_VehicleDisplaySpeed.VehicleSpeed")
+                           ->width == 32);
+    const auto gear = signal_of(vehicle_info + "VI_ActualGear.AG_ActualGear");
+    assert(gear.options.size() == 5 && gear.options[3].raw == 3 &&
+           gear.options[3].name == "AG_D_GEAR" && gear.options[4].raw == 255);
+    const auto inside = signal_of("GeneralACSet.Notify_f_GeneralACSts.GeneralACSts.InsideTemp");
+    assert(catalog_field(VehicleCatalog::passion,
+                         "GeneralACSet.Notify_f_GeneralACSts.GeneralACSts.InsideTemp")
+                           ->initial == 65534 &&
+           inside.resolution == 0.1 && inside.offset == -50.0);
+    assert(signal_of("AssidDrvgMgr.Notify_f_ADrvgMgrFunOuC.ADrvgMgrFunOuC.ADrvgMgrFunOu."
+                     "ACC_TargetSpeed_kph")
+                   .invalid == 255U);
+    // Get replies and the FF, RR and Set requests of the QNX side are not inputs of the model.
+    assert(!catalog_field(VehicleCatalog::passion,
+                          "FrontACSet.FF_A_COnOffReqFro.A_COnOffReqFro.OnOffReq"));
+    const auto passion_initial = initial_state(VehicleCatalog::passion);
+    validate_state(passion_initial);
+    assert(passion_initial["map_sha256"] == passion_map_sha256 &&
+           state_catalog(passion_initial) == VehicleCatalog::passion &&
+           passion_initial["raw_oem"].size() == 1598 &&
+           passion_initial.dump(2).size() < vehicle_state_bytes);
+    const std::string crc = "DoorStsService.Notify_f_DoorSts.AllDoorSts.E2E_Header.E2E_CRC";
+    assert(catalog_field(VehicleCatalog::passion, crc)->width == 64);
+    assert(apply_patch(passion_initial, {{crc, UINT64_MAX}})["raw_oem"][crc] == UINT64_MAX);
+    rejects([&] {
+        apply_patch(passion_initial, {{"soc", 55}});
+    });
+    rejects([&] {
+        apply_patch(initial, {{crc, 0}});
     });
     auto speed = apply_patch(initial, {{"speed", 65}, {"soc", 73}});
     assert(speed["raw_oem"]["speed10x"] == 650);
@@ -788,6 +846,11 @@ int main(int argc, char **argv) try {
         restored.patch({{"soc", 999}});
     });
     assert(restored.state() == original);
+    // A Passion state exceeds the default bound of a private JSON file.
+    VehicleModel passion_model(dir / "passion-state.json", VehicleCatalog::passion);
+    assert(VehicleModel(dir / "passion-state.json", VehicleCatalog::passion).state() ==
+                   passion_model.state() &&
+           std::filesystem::file_size(dir / "passion-state.json") > 128 * 1024);
 #ifndef _WIN32
     {
         // A writer terminated after creating its staging file leaves it behind.

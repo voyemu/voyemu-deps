@@ -205,7 +205,7 @@ int main(int argc, char **argv) {
         const auto profile_pin = sha256_file(definition);
         const auto seed = qnx_capture_initial_state(read_private_json(definition));
         ensure_private_directory(directory);
-        write_private_json(directory / "vehicle-state.json", seed);
+        write_private_json(directory / "vehicle-state.json", seed, vehicle_state_bytes);
         write_private_json(output / "seed.json",
                            {{"profile_sha256", profile_pin}, {"state", seed}});
         auto start = Clock::now();

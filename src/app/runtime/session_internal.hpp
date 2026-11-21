@@ -102,7 +102,9 @@ tighter_deadline(std::chrono::steady_clock::time_point current,
 }
 
 int cluster_ui_timeout(const Json &operation);
-inline constexpr std::size_t maximum_message = 128 * 1024;
+// A status carries the vehicle state and the field catalogue of the machine, up to the 1598 fields
+// of Passion.
+inline constexpr std::size_t maximum_message = 1024 * 1024;
 std::size_t response_limit(const Json &operation);
 std::filesystem::path session_sdk_registration_directory(const std::filesystem::path &directory,
                                                          bool diagnostic_native);

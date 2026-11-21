@@ -1602,17 +1602,19 @@ struct Backend::Impl {
                                  : options.session / "vehicle-state.json");
 
             if (std::filesystem::exists(path)) {
-                auto value = read_json(path, 128 * 1024);
+                auto value = read_json(path, vehicle_state_bytes);
                 need(value.is_object() && value.size() == 6 && value.at("schema") == 1 &&
                              (value.at("map_sha256") == qinggan09_map_sha256 ||
-                              value.at("map_sha256") == qinggan11_map_sha256) &&
+                              value.at("map_sha256") == qinggan11_map_sha256 ||
+                              value.at("map_sha256") == passion_map_sha256) &&
                              value.at("origin") == "manual-emulator" &&
                              value.at("sequence").is_number_unsigned(),
                      "Input wake vehicle schema");
                 auto seq = value.at("sequence").get<std::uint64_t>();
                 need(seq >= 1 && seq < 0x100000000ULL, "Input wake vehicle sequence");
 
-                if (seq > vehicle_issued) {
+                // The Passion cluster receives no vehicle state from the model.
+                if (seq > vehicle_issued && value.at("map_sha256") != passion_map_sha256) {
                     vehicle = seq;
                 }
             }

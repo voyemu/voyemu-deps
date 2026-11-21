@@ -5,6 +5,7 @@
 cmake_minimum_required(VERSION 3.22)
 get_filename_component(voyemu_root "${CMAKE_CURRENT_LIST_DIR}/../.." REALPATH)
 set(voyemu_errorprone_roots
+    src/app/core/generator
     src/app/graphics/generator
     src/dev/checks
     src/dev/format

@@ -194,7 +194,8 @@ void Session::deliver_android_state() {
                 },
                 [&](std::uint32_t floor) {
                     model_.advance_revision(floor);
-                    write_private_json(directory_ / "vehicle-state.json", model_.state());
+                    write_private_json(directory_ / "vehicle-state.json", model_.state(),
+                                       vehicle_state_bytes);
                 },
                 [&](const std::vector<std::string> &args) {
                     std::string command;
@@ -273,7 +274,7 @@ void Session::deliver_android_state() {
                 // The guest persists a monotonic revision, including across Quick Boot. Never
                 // import its values.
                 state = model_.advance_revision(floor);
-                write_private_json(directory_ / "vehicle-state.json", state);
+                write_private_json(directory_ / "vehicle-state.json", state, vehicle_state_bytes);
                 logging::write(
                         logging::Level::info, "android", "state.revision_advanced",
                         {{"retained_sequence", floor}, {"source_sequence", state.at("sequence")}});
@@ -997,7 +998,8 @@ void Session::poll_oem_settings() {
             if (auto change = oem_language_change(oem_language_, *current)) {
                 if (model_.state().at("raw_oem").at("ivi_languageSet") != *current) {
                     model_.patch(*change);
-                    write_private_json(directory_ / "vehicle-state.json", model_.state());
+                    write_private_json(directory_ / "vehicle-state.json", model_.state(),
+                                       vehicle_state_bytes);
                     schedule_android_state(before);
 
                     if (cluster_requested_) {

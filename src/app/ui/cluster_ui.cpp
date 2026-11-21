@@ -790,10 +790,10 @@ void Client::ingest(const Json &response) {
                        index = field.at("index").get<unsigned>();
 
         if (!names.insert(name).second || !indexes.insert(index).second ||
-            (index < 1 || index > platform_catalog.size()) || width < 1 || width > 63 ||
+            (index < 1 || index > platform_catalog.size()) || width < 1 || width > 64 ||
             !raw.contains(name) || !raw.at(name).is_number_integer() ||
-            raw.at(name).get<std::int64_t>() < 0 ||
-            raw.at(name).get<std::uint64_t>() > ((std::uint64_t{1} << width) - 1)) {
+            (!raw.at(name).is_number_unsigned() && raw.at(name).get<std::int64_t>() < 0) ||
+            raw.at(name).get<std::uint64_t>() > field_maximum(width)) {
             throw VoyemuError("CLUSTER_UI", "Malformed canonical vehicle field");
         }
 

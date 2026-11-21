@@ -3,11 +3,13 @@
 #include "private_json_reader.hpp"
 #include "private_state_security.hpp"
 #include <algorithm>
+#include <array>
 #include <cerrno>
 #include <chrono>
 #include <cstdio>
 #include <ctime>
 #include <fstream>
+#include <map>
 #include <set>
 #include <stdexcept>
 #include <thread>
@@ -42,6 +44,8 @@ bool valid_profile_name(std::string_view name) {
 
 namespace detail {
 const std::vector<Field> &qinggan11_catalog();
+const std::vector<Field> &passion_catalog();
+std::span<const SignalDefinition> passion_signals();
 } // namespace detail
 
 VehicleCatalog vehicle_catalog(std::string_view platform) {
@@ -49,26 +53,36 @@ VehicleCatalog vehicle_catalog(std::string_view platform) {
         return VehicleCatalog::qinggan11;
     }
 
-    if (platform == "qinggan09" || platform == "passion") {
+    if (platform == "qinggan09") {
         return VehicleCatalog::qinggan09;
+    }
+
+    if (platform == "passion") {
+        return VehicleCatalog::passion;
     }
 
     throw VoyemuError("VEHICLE_CATALOG", "unknown platform");
 }
 
 const char *catalog_map_sha256(VehicleCatalog catalog) {
-    return catalog == VehicleCatalog::qinggan11 ? qinggan11_map_sha256 : qinggan09_map_sha256;
+    switch (catalog) {
+    case VehicleCatalog::qinggan11:
+        return qinggan11_map_sha256;
+    case VehicleCatalog::passion:
+        return passion_map_sha256;
+    default:
+        return qinggan09_map_sha256;
+    }
 }
 
 VehicleCatalog state_catalog(const Json &state) {
     const auto map = state.is_object() ? state.find("map_sha256") : state.end();
 
-    if (map != state.end() && *map == qinggan09_map_sha256) {
-        return VehicleCatalog::qinggan09;
-    }
-
-    if (map != state.end() && *map == qinggan11_map_sha256) {
-        return VehicleCatalog::qinggan11;
+    for (const auto catalog :
+         {VehicleCatalog::qinggan09, VehicleCatalog::qinggan11, VehicleCatalog::passion}) {
+        if (map != state.end() && *map == catalog_map_sha256(catalog)) {
+            return catalog;
+        }
     }
 
     throw VoyemuError("VEHICLE_SCHEMA", "unknown vehicle catalog");
@@ -661,7 +675,38 @@ static const std::vector<Field> &qinggan09_catalog() {
 }
 
 const std::vector<Field> &catalog(VehicleCatalog catalog) {
-    return catalog == VehicleCatalog::qinggan11 ? detail::qinggan11_catalog() : qinggan09_catalog();
+    switch (catalog) {
+    case VehicleCatalog::qinggan11:
+        return detail::qinggan11_catalog();
+    case VehicleCatalog::passion:
+        return detail::passion_catalog();
+    default:
+        return qinggan09_catalog();
+    }
+}
+
+const Field *catalog_field(VehicleCatalog catalog, std::string_view name) {
+    static const auto indexes = [] {
+        std::array<std::map<std::string, const Field *, std::less<>>, 3> result;
+
+        for (const auto which :
+             {VehicleCatalog::qinggan09, VehicleCatalog::qinggan11, VehicleCatalog::passion}) {
+            for (const auto &field : voyemu::catalog(which)) {
+                result[static_cast<std::size_t>(which)].emplace(field.name, &field);
+            }
+        }
+
+        return result;
+    }();
+    const auto &index = indexes[static_cast<std::size_t>(catalog)];
+    const auto found = index.find(name);
+
+    return found == index.end() ? nullptr : found->second;
+}
+
+std::span<const SignalDefinition> catalog_signals(VehicleCatalog catalog) {
+    return catalog == VehicleCatalog::passion ? detail::passion_signals()
+                                              : std::span<const SignalDefinition>{};
 }
 
 Json catalog_json(VehicleCatalog catalog) {
@@ -741,7 +786,7 @@ void validate_state(const Json &state) {
 
     for (const auto &field : fields) {
         if (!raw.contains(field.name) || !integer(raw[field.name]) ||
-            raw[field.name].get<std::uint64_t>() >= (std::uint64_t{1} << field.width)) {
+            raw[field.name].get<std::uint64_t>() > field_maximum(field.width)) {
             throw VoyemuError("VEHICLE_WIDTH", field.name);
         }
 
@@ -750,9 +795,10 @@ void validate_state(const Json &state) {
         }
     }
 
-    if (raw["speed"].get<unsigned>() > 255 ||
-        raw["speed10x"].get<unsigned>() != raw["speed"].get<unsigned>() * 10 ||
-        raw["soc"].get<unsigned>() > 100) {
+    if (raw.contains("speed") &&
+        (raw["speed"].get<unsigned>() > 255 ||
+         raw["speed10x"].get<unsigned>() != raw["speed"].get<unsigned>() * 10 ||
+         raw["soc"].get<unsigned>() > 100)) {
         throw VoyemuError("VEHICLE_COUPLED", "speed/SOC invalid");
     }
 }
@@ -1430,11 +1476,11 @@ VehicleModel::VehicleModel(std::filesystem::path path, VehicleCatalog catalog)
     ensure_private_directory(path_.parent_path());
 
     if (std::filesystem::exists(path_) || std::filesystem::is_symlink(path_)) {
-        state_ = read_private_json(path_);
+        state_ = read_private_json(path_, vehicle_state_bytes);
         validate_state(state_);
     } else {
         state_ = initial_state(catalog);
-        write_private_json(path_, state_);
+        write_private_json(path_, state_, vehicle_state_bytes);
     }
 }
 
@@ -1447,7 +1493,7 @@ const Json &VehicleModel::advance_revision(std::uint32_t observed) {
     next["sequence"] = std::uint64_t{observed} + 1;
     next["updated_utc"] = utc_now();
     validate_state(next);
-    write_private_json(path_, next);
+    write_private_json(path_, next, vehicle_state_bytes);
     state_ = std::move(next);
 
     return state_;
@@ -1456,7 +1502,7 @@ const Json &VehicleModel::advance_revision(std::uint32_t observed) {
 const Json &VehicleModel::patch(const Json &values) {
     auto next = apply_patch(state_, values);
 
-    write_private_json(path_, next);
+    write_private_json(path_, next, vehicle_state_bytes);
     state_ = std::move(next);
 
     return state_;

@@ -1235,7 +1235,8 @@ void Session::advance_windows_android_transaction() {
                 if (auto change = oem_language_change(oem_language_, *value)) {
                     if (model_.state().at("raw_oem").at("ivi_languageSet") != *value) {
                         model_.patch(*change);
-                        write_private_json(directory_ / "vehicle-state.json", model_.state());
+                        write_private_json(directory_ / "vehicle-state.json", model_.state(),
+                                           vehicle_state_bytes);
 
                         if (cluster_requested_) {
                             deliveries_["qnx"]["vehicle"] = qnx_vehicle_pending();
@@ -2015,7 +2016,7 @@ void Session::advance_windows_android_transaction() {
                         !android_vehicle_receipt_matches(receipt, transaction.submitted_state)) {
                         transaction.submitted_state = model_.advance_revision(floor);
                         write_private_json(directory_ / "vehicle-state.json",
-                                           transaction.submitted_state);
+                                           transaction.submitted_state, vehicle_state_bytes);
                     }
 
                     if (android_vehicle_receipt_matches(receipt, transaction.submitted_state)) {

@@ -88,7 +88,7 @@ Session::Session(std::filesystem::path directory, std::string session_id,
                                 {"policy_id", "voyemu-own-power-v1"},
                                 {"state", PowerEcu::name(power_.state())}};
     next_android_ = next_oem_settings_ = next_qnx_ = std::chrono::steady_clock::now();
-    write_private_json(directory_ / "vehicle-state.json", model_.state());
+    write_private_json(directory_ / "vehicle-state.json", model_.state(), vehicle_state_bytes);
     auto creator = os::current_process();
     auto owner_path = directory_ / "session-owner.json";
     Json owner{{"schema", 1},
@@ -219,7 +219,7 @@ void Session::apply_adas_outcome(AdasOutcome outcome) {
 
     if (!outcome.patch.empty()) {
         model_.patch(outcome.patch);
-        write_private_json(directory_ / "vehicle-state.json", model_.state());
+        write_private_json(directory_ / "vehicle-state.json", model_.state(), vehicle_state_bytes);
         schedule_android_state(before.get<std::uint32_t>());
 
         if (cluster_requested_) {
@@ -253,7 +253,7 @@ void Session::apply_power_outcome(PowerEcu::Outcome outcome) {
 
     if (!outcome.patch.empty()) {
         model_.patch(outcome.patch);
-        write_private_json(directory_ / "vehicle-state.json", model_.state());
+        write_private_json(directory_ / "vehicle-state.json", model_.state(), vehicle_state_bytes);
 
         if (cluster_requested_) {
             deliveries_["qnx"]["vehicle"] = qnx_vehicle_pending();
@@ -267,7 +267,7 @@ void Session::apply_power_outcome(PowerEcu::Outcome outcome) {
 
     if (outcome.patch.empty() && acc("previous") != acc("state")) {
         model_.advance_revision(before.get<std::uint32_t>());
-        write_private_json(directory_ / "vehicle-state.json", model_.state());
+        write_private_json(directory_ / "vehicle-state.json", model_.state(), vehicle_state_bytes);
     }
 
     schedule_android_state(before.get<std::uint32_t>());
