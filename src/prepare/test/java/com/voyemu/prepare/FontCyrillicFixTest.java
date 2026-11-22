@@ -94,6 +94,64 @@ public final class FontCyrillicFixTest {
         }
     }
 
+    // The left edge of each Russian outline and its hmtx side bearing and advance, by glyph.
+    static java.util.Map<Integer, java.util.List<Integer>> letterMetrics(byte[] font) {
+        var tables = FontCyrillicAdvanceFix.tables(font);
+        var buffer = java.nio.ByteBuffer.wrap(font);
+        int head = tables.get("head").offset();
+        int hmtx = tables.get("hmtx").offset();
+        int loca = tables.get("loca").offset();
+        int glyf = tables.get("glyf").offset();
+        boolean longLoca = buffer.getShort(head + 50) == 1;
+        var result = new java.util.TreeMap<Integer, java.util.List<Integer>>();
+
+        for (int glyph : FontCyrillicAdvanceFix.coreRussianGlyphs(font, tables.get("cmap"))) {
+            int start =
+                    longLoca
+                            ? buffer.getInt(loca + glyph * 4)
+                            : (buffer.getShort(loca + glyph * 2) & 0xffff) * 2;
+            result.put(
+                    glyph,
+                    java.util.List.of(
+                            (int) buffer.getShort(glyf + start + 2),
+                            (int) buffer.getShort(hmtx + glyph * 4 + 2),
+                            buffer.getShort(hmtx + glyph * 4) & 0xffff));
+        }
+
+        return result;
+    }
+
+    // stb_truetype draws an outline at its own coordinates, so each repaired letter is moved there.
+    static void outlines() throws Exception {
+        for (String name : new String[] {"regular-corrected.ttf", "semibold-corrected.ttf"}) {
+            byte[] repaired = fixture(name);
+            byte[] before = repaired.clone();
+            byte[] aligned = FontCyrillicOutlineFix.align(repaired);
+            var was = letterMetrics(repaired);
+            var now = letterMetrics(aligned);
+            check(Arrays.equals(before, repaired), "alignment keeps its input " + name);
+            check(
+                    was.values().stream().anyMatch(m -> !m.get(0).equals(m.get(1))),
+                    "the repaired fixture has letters off their side bearings " + name);
+
+            for (var entry : now.entrySet()) {
+                var metric = entry.getValue();
+                check(
+                        metric.get(0).equals(metric.get(1))
+                                && metric.get(1).equals(was.get(entry.getKey()).get(1))
+                                && metric.get(2).equals(was.get(entry.getKey()).get(2)),
+                        "a letter starts at its side bearing with its advance " + name);
+            }
+
+            check(
+                    FontCyrillicAdvanceFix.checksum(aligned, 0, aligned.length) == 0xb1b0afbaL,
+                    "the aligned font has a valid checksum " + name);
+            check(
+                    Arrays.equals(aligned, FontCyrillicOutlineFix.align(aligned)),
+                    "alignment is idempotent " + name);
+        }
+    }
+
     static void malformedInputs() throws Exception {
         FontCyrillicAdvanceFix.Result missing = FontCyrillicAdvanceFix.patch(null);
 
@@ -272,6 +330,7 @@ public final class FontCyrillicFixTest {
         fixtures = Path.of(args[0], "src/prepare/test/fixtures/font-cyrillic");
         syntheticFonts();
         identities();
+        outlines();
         malformedInputs();
         format12Cmap();
         format4Cmap();

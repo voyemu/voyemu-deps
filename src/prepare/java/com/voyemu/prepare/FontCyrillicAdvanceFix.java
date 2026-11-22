@@ -205,7 +205,7 @@ final class FontCyrillicAdvanceFix {
         return new GlyphMetric(metricOffset, u16(font, metricOffset), width);
     }
 
-    private static Map<String, Table> tables(byte[] font) {
+    static Map<String, Table> tables(byte[] font) {
         int count = u16(font, 4);
 
         if (count <= 0 || count > 128 || 12L + count * 16L > font.length) {
@@ -256,7 +256,7 @@ final class FontCyrillicAdvanceFix {
         return result;
     }
 
-    private static Table required(Map<String, Table> tables, String tag, int length) {
+    static Table required(Map<String, Table> tables, String tag, int length) {
         Table table = tables.get(tag);
 
         if (table == null || table.length() < length) {
@@ -266,7 +266,7 @@ final class FontCyrillicAdvanceFix {
         return table;
     }
 
-    private static Set<Integer> coreRussianGlyphs(byte[] font, Table cmap) {
+    static Set<Integer> coreRussianGlyphs(byte[] font, Table cmap) {
         Set<Integer> glyphs = new LinkedHashSet<>();
 
         for (int cp = 0x0410; cp <= 0x044f; cp++) {

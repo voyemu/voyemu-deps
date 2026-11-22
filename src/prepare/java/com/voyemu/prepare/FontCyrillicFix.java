@@ -12,11 +12,15 @@ import java.util.List;
  * full em, which spaces Russian text out; each known original becomes its one corrected font.
  */
 final class FontCyrillicFix {
-    /** An accepted original and the corrected font it becomes. */
+    /**
+     * An accepted original, the font of its advance repair, which voboost pins as well, and the
+     * corrected font with the Russian outlines moved to their side bearings.
+     */
     record Identity(
             String name,
             int inputBytes,
             String inputSha256,
+            String repairedSha256,
             int outputBytes,
             String outputSha256,
             int glyphs,
@@ -28,8 +32,9 @@ final class FontCyrillicFix {
                     "regular",
                     1_697_868,
                     "b90b145194f1206b3d515e05d2bc2f27f2411aa0b6897f61755d7b812fe083c1",
-                    1_712_864,
                     "4f03e27101265730adf4634746350eb44aef725e8d8601a48a366a03cf8b6bd0",
+                    1_712_860,
+                    "5e153c90eacd1b880ffdf73d31c6315a584939506d26ebdae94cdc6a0a127f56",
                     64,
                     true);
     static final Identity SEMIBOLD =
@@ -37,8 +42,9 @@ final class FontCyrillicFix {
                     "semibold",
                     1_644_272,
                     "305f942097a1b65d1dca1c357c0197acf62346eea83e2fbe95cc55f62821f000",
-                    1_644_272,
                     "e8e460cdb59f41367d7c345aa1004f7d65c14c27685e60da5646a1385e846777",
+                    1_644_264,
+                    "84d6244d9b3b9550f4b29012e8b936618109535215a0edfe2bf328e10bf08c8f",
                     63,
                     false);
     static final List<Identity> IDENTITIES = List.of(REGULAR, SEMIBOLD);
@@ -79,12 +85,17 @@ final class FontCyrillicFix {
         FontCyrillicAdvanceFix.Result result = FontCyrillicAdvanceFix.patch(input);
         require(
                 result.glyphsPatched() == known.glyphs()
-                        && result.bytes().length == known.outputBytes()
-                        && sha256(result.bytes()).equals(known.outputSha256())
+                        && sha256(result.bytes()).equals(known.repairedSha256())
                         && !FontCyrillicAdvanceFix.patch(result.bytes()).changed(),
-                "Corrected " + known.name() + " font differs: " + result.reason());
+                "Repaired " + known.name() + " font differs: " + result.reason());
+        byte[] aligned = FontCyrillicOutlineFix.align(result.bytes());
+        require(
+                aligned.length == known.outputBytes()
+                        && sha256(aligned).equals(known.outputSha256())
+                        && !FontCyrillicAdvanceFix.patch(aligned).changed(),
+                "Corrected " + known.name() + " font differs");
 
-        return result.bytes();
+        return aligned;
     }
 
     // Gives every glyph its own advance in hmtx, moving the tables behind it.
