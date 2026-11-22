@@ -27,7 +27,7 @@ std::vector<std::uint8_t> payload(std::size_t size) {
 }
 } // namespace
 
-int main() {
+int main() try {
     const std::string check = "123456789";
     assert(someip_crc64({reinterpret_cast<const std::uint8_t *>(check.data()), check.size()}) ==
            0x995dc9bbdf1939faULL);
@@ -54,4 +54,8 @@ int main() {
     std::cout << "E2E profile 7 matches the CRC-64/XZ check value and the cluster's protect\n";
 
     return 0;
+} catch (const std::exception &error) {
+    std::cerr << error.what() << '\n';
+
+    return 1;
 }

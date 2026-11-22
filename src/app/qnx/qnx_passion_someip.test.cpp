@@ -148,7 +148,7 @@ const SomeipEvent &event(const Json &contract, std::string_view name) {
 }
 } // namespace
 
-int main() {
+int main() try {
     const auto table = Json::parse(R"({"servicedefine":[{"ServiceName":"VehicleDrivingInfo",
         "method_event_define":[{"Method_Event_Name":"Notify_f_VehicleDrivingInform","Signals":[
           {"name":"8155QNX.VehicleDrivingInfo.Notify_f_VehicleDrivingInform.V.E2E_Header.E2E_CRC","len":8},
@@ -199,4 +199,8 @@ int main() {
     std::cout << "Passion SOME/IP contract from synthetic client binary, descriptors and table\n";
 
     return 0;
+} catch (const std::exception &error) {
+    std::cerr << error.what() << '\n';
+
+    return 1;
 }

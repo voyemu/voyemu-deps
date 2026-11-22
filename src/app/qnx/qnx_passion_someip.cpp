@@ -257,7 +257,7 @@ Json qnx_passion_someip_contract(std::string_view ic_service, const Json &servic
         Json eventgroups = Json::array();
 
         for (unsigned i = 0; i < groups; ++i) {
-            eventgroups.push_back(elf.read(symbol.value + 4 + 2 * i, 2));
+            eventgroups.push_back(elf.read(symbol.value + 4 + 2ULL * i, 2));
         }
 
         const auto service_id = elf.read(symbol.value + 0x28, 2),

@@ -99,7 +99,7 @@ Bytes udp_payload(const Bytes &frame) {
 }
 } // namespace
 
-int main() {
+int main() try {
     const auto contract = someip_contract(Json::parse(R"({"schema":1,"services":[
         {"name":"VehicleDrivingInfo","vlan":12,"service":8192,"instance":1,"major":1,"events":[
           {"name":"Notify_f_VehicleDrivingInform","event":32769,"eventgroups":[8192],"bytes":40,"e2e":true,
@@ -204,4 +204,8 @@ int main() {
     std::cout << "SOME/IP gateway: ARP, SD offer/subscribe/ack and E2E notifications\n";
 
     return 0;
+} catch (const std::exception &error) {
+    std::cerr << error.what() << '\n';
+
+    return 1;
 }

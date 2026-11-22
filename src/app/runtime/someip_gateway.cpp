@@ -261,7 +261,7 @@ void SomeipGateway::receive(std::span<const std::uint8_t> frame, Clock::time_poi
         return;
     }
 
-    const std::size_t ihl = (payload[0] & 0x0f) * 4;
+    const std::size_t ihl = std::size_t(payload[0] & 0x0f) * 4;
     const auto total = get(payload, 2, 2);
 
     if (ihl < 20 || total > payload.size() || total < ihl + 8) {
