@@ -216,13 +216,6 @@
       }
     },
     {
-      "name": "FontDfpMedium",
-      "file": "fonts/DFPKingGothicGB-Medium-2.ttf",
-      "source": {
-        "path": "/system/fonts/DFPKingGothicGB-Medium-2.ttf"
-      }
-    },
-    {
       "name": "FontDfpSemibold",
       "file": "fonts/DFPKingGothicGB-Semibold-2.ttf",
       "source": {

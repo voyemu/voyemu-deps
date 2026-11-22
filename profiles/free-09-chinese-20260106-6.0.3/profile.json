@@ -28,7 +28,11 @@
         }
       },
       "medium": {
-        "original": "FontDfpMedium"
+        "original": "FontDfpSemibold",
+        "corrected": {
+          "bytes": 1644272,
+          "sha256": "e8e460cdb59f41367d7c345aa1004f7d65c14c27685e60da5646a1385e846777"
+        }
       },
       "bold": {
         "original": "FontDfpSemibold",
@@ -606,18 +610,6 @@
       "acquisition": {
         "image": "system",
         "path": "/system/fonts/HuaKangJinGangHei-Regular-2.ttf"
-      }
-    },
-    "FontDfpMedium": {
-      "file": "fonts/DFPKingGothicGB-Medium-2.ttf",
-      "bytes": 1647384,
-      "sha256": "7d35517b8f48a9297dde75aefcf8a69c7020b0f87017df8e8ba0b0a04660243d",
-      "source": {
-        "path": "/system/fonts/DFPKingGothicGB-Medium-2.ttf"
-      },
-      "acquisition": {
-        "image": "system",
-        "path": "/system/fonts/DFPKingGothicGB-Medium-2.ttf"
       }
     },
     "FontDfpSemibold": {
