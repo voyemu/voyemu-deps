@@ -43,9 +43,34 @@ final class NativeCanKernel {
     private final Map<String, Object> inputs;
     private final boolean api30;
 
-    private NativeCanKernel(Path recipe) throws IOException {
-        this.recipe = recipe;
-        component = read(recipe.resolve("component.json"));
+    /**
+     * A variant recipe names a base recipe of a profile group and adds its own patches and
+     * configuration; null for a base recipe.
+     */
+    private final Path variantRecipe;
+
+    private final Map<String, Object> variant;
+
+    private NativeCanKernel(Path directory) throws IOException {
+        var declared = read(directory.resolve("component.json"));
+
+        if ("development-kernel-variant".equals(declared.get("kind"))) {
+            String base = Json.str(declared, "base");
+            require(base.matches("common-[a-z0-9-]+"), "Invalid base recipe " + base);
+            variantRecipe = directory;
+            variant = declared;
+            recipe = directory.resolve("../../..").normalize().resolve(base + "/components/kernel");
+            component = read(recipe.resolve("component.json"));
+            require(
+                    Json.integer(component, "android_api") == 30,
+                    "Variant recipes require an API 30 base");
+        } else {
+            variantRecipe = null;
+            variant = null;
+            recipe = directory;
+            component = declared;
+        }
+
         long api = Json.integer(component, "android_api");
         require(api == 28 || api == 30, "Unsupported CAN kernel API");
         api30 = api == 30;
@@ -115,13 +140,71 @@ final class NativeCanKernel {
         return names;
     }
 
-    /** Patches in application order. */
-    private List<String> patches() {
-        return names("patches");
+    /** Patches in application order: the base recipe first, then the variant. */
+    private List<Path> patches() {
+        var files = new ArrayList<Path>();
+
+        for (String name : names("patches")) {
+            files.add(Storage.confined(recipe, name));
+        }
+
+        if (variant != null) {
+            for (Object name : Json.list(variant.get("patches"))) {
+                files.add(Storage.confined(variantRecipe, (String) name));
+            }
+        }
+
+        return files;
     }
 
     private List<String> drivers() {
         return names("driver");
+    }
+
+    private String releaseName() {
+        return Json.str(variant == null ? component : variant, "release_name");
+    }
+
+    /** Kconfig values the variant sets over the stock configuration, as y, m or n. */
+    private Map<String, String> variantConfig() {
+        var values = new LinkedHashMap<String, String>();
+
+        if (variant != null) {
+            for (var entry : Json.obj(variant, "config").entrySet()) {
+                String value = (String) entry.getValue();
+                require(
+                        entry.getKey().matches("CONFIG_[A-Z0-9_]+") && value.matches("[ymn]"),
+                        "Invalid variant configuration " + entry.getKey());
+                values.put(entry.getKey(), value);
+            }
+        }
+
+        return values;
+    }
+
+    /** The stock configuration with the variant values replacing their stock lines. */
+    private String configuration(String stock) {
+        if (variant == null) {
+            return stock;
+        }
+
+        var config = variantConfig();
+        var lines = new ArrayList<String>();
+
+        for (String line : stock.lines().toList()) {
+            var entry = KCONFIG.matcher(line);
+
+            if (!entry.matches()
+                    || !config.containsKey(
+                            entry.group(1) == null ? entry.group(3) : entry.group(1))) {
+                lines.add(line);
+            }
+        }
+
+        config.forEach((key, value) ->
+                lines.add(value.equals("n") ? "# " + key + " is not set" : key + "=" + value));
+
+        return String.join("\n", lines) + "\n";
     }
 
     /**
@@ -130,13 +213,25 @@ final class NativeCanKernel {
      */
     private Map<String, Object> recipeHashes() throws Exception {
         var hashes = new LinkedHashMap<String, Object>();
-        var files = new ArrayList<>(patches());
+        var files = new ArrayList<>(names("patches"));
 
         files.addAll(drivers());
         files.add("stock-embedded.config");
 
         for (String name : files) {
             hashes.put(name, FilesSupport.hash(Storage.confined(recipe, name)));
+        }
+
+        if (variant != null) {
+            hashes.put(
+                    "variant/component.json",
+                    FilesSupport.hash(variantRecipe.resolve("component.json")));
+
+            for (Object name : Json.list(variant.get("patches"))) {
+                hashes.put(
+                        "variant/" + name,
+                        FilesSupport.hash(Storage.confined(variantRecipe, (String) name)));
+            }
         }
 
         return hashes;
@@ -199,8 +294,8 @@ final class NativeCanKernel {
         }
 
         // API 30 patches have a fixed order. API 28 uses its manifest order.
-        for (String name : patches()) {
-            KernelSource.patch(source, recipe.resolve(name));
+        for (Path file : patches()) {
+            KernelSource.patch(source, file);
         }
 
         Path misc = source.resolve("drivers/misc");
@@ -258,7 +353,7 @@ final class NativeCanKernel {
             Files.writeString(whitelist, String.join("\n", symbols) + "\n");
             Files.writeString(
                     output.resolve(".config"),
-                    whitelist(Files.readString(config), "abi_symbollist.raw"));
+                    whitelist(configuration(Files.readString(config)), "abi_symbollist.raw"));
             KernelStockModules.inventory(
                     base.resolve("ramdisk.img"), work.resolve("stock-modules.json"));
             receipt.put("recipe", recipeHashes());
@@ -620,7 +715,7 @@ final class NativeCanKernel {
 
         if (api30) {
             verifyModuleAbi(work);
-            var original = configValues(stock);
+            var original = configValues(configuration(stock));
             var actual = configValues(config);
             var changed = new TreeSet<>(original.keySet());
             changed.addAll(actual.keySet());
@@ -709,15 +804,22 @@ final class NativeCanKernel {
         provenance.put("toolchain", Json.str(Json.obj(component, "toolchain"), "version"));
 
         if (api30) {
-            provenance.put(
-                    "configuration_deviations",
-                    List.of(
-                            "CONFIG_CC_CAN_LINK unset: host has no Linux userland link sysroot;"
-                                    + " guest runtime unchanged by this capability probe",
-                            "CONFIG_UAPI_HEADER_TEST unset by CONFIG_CC_CAN_LINK; generated kernel"
-                                    + " UAPI headers still built",
-                            "CONFIG_UNUSED_KSYMS_WHITELIST rewritten to same 4 977 symbols from 18"
-                                    + " pinned source KMI lists"));
+            var deviations =
+                    new ArrayList<>(
+                            List.of(
+                                    "CONFIG_CC_CAN_LINK unset: host has no Linux userland link"
+                                            + " sysroot; guest runtime unchanged by this capability"
+                                            + " probe",
+                                    "CONFIG_UAPI_HEADER_TEST unset by CONFIG_CC_CAN_LINK;"
+                                            + " generated kernel UAPI headers still built",
+                                    "CONFIG_UNUSED_KSYMS_WHITELIST rewritten to same 4 977"
+                                            + " symbols from 18 pinned source KMI lists"));
+
+            if (variant != null) {
+                deviations.add(Json.str(variant, "deviation"));
+            }
+
+            provenance.put("configuration_deviations", deviations);
             provenance.put("stock_module_count", 37);
             provenance.put("stock_import_crc_count", 2594);
             Path symvers = output.resolve("Module.symvers");
@@ -771,7 +873,7 @@ final class NativeCanKernel {
 
         return Json.str(kernelBuild, "releaseBase")
                 + "kernel-"
-                + Json.str(component, "release_name")
+                + releaseName()
                 + "-"
                 + imageSha.substring(0, 8)
                 + "/Image";

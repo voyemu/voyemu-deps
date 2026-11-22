@@ -32,6 +32,7 @@ jobs:
                     - { set: windows, runner: windows-2022, fixtures: 'true' }
                     - { set: kernel-qinggan-09, runner: ubuntu-24.04 }
                     - { set: kernel-qinggan-11, runner: ubuntu-24.04 }
+                    - { set: kernel-passion, runner: ubuntu-24.04 }
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:

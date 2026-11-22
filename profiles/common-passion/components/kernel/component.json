@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "kind": "development-kernel-variant",
+  "base": "common-qinggan-11",
+  "release_name": "passion",
+  "patches": [
+    "vlan-kabi.patch"
+  ],
+  "config": {
+    "CONFIG_VLAN_8021Q": "y",
+    "CONFIG_VLAN_8021Q_GVRP": "n",
+    "CONFIG_VLAN_8021Q_MVRP": "n",
+    "CONFIG_BRIDGE_VLAN_FILTERING": "n"
+  },
+  "deviation": "CONFIG_VLAN_8021Q=y: OEM vendor config_vlan.sh creates the 802.1Q interfaces eth0.3/4/6/7/10..14 that someipd binds; net_device.vlan_info takes ANDROID_KABI reserved slot 1, so the frozen KMI layout and stock module CRCs stay"
+}

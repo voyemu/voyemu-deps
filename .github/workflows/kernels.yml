@@ -10,7 +10,7 @@ on:
             kernel:
                 description: Kernel recipe to build
                 type: choice
-                options: [qinggan-09, qinggan-11]
+                options: [qinggan-09, qinggan-11, passion]
 
 permissions:
     contents: read
@@ -45,7 +45,7 @@ jobs:
                   recipe="profiles/common-${{ steps.select.outputs.kernel }}/components/kernel"
                   work="$PWD/.local/build/kernel/work"
                   base=()
-                  if [[ "${{ steps.select.outputs.kernel }}" == qinggan-11 ]]; then
+                  if [[ "${{ steps.select.outputs.kernel }}" != qinggan-09 ]]; then
                       base=("$PWD/.local/build/kernel/base")
                   fi
                   src/prepare/kernel/kernel-tool.sh "$recipe" prepare "$PWD" "$work" "${base[@]}"

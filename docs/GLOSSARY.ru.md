@@ -35,7 +35,7 @@
 | набор инструментов | Закреплённые инструменты сборки: Zig, CMake, Ninja, JDK | тулчейн |
 | аппаратный адаптер | Замена оборудования автомобиля, которое ожидают штатные образы QNX (hardware adapter); выбирается полем `hardware_adapter` в `profile-qnx.json` | — |
 | платформа Free/Dreamer | Общая платформа мультимедиа и приборки автомобилей Voyah Free и Dreamer (Free/Dreamer platform) в поколениях Android 9 и Android 11; идентификаторы в коде, аппаратные адаптеры и рецепты ядра разработки называют их внутренним обозначением `qinggan09` и `qinggan11` | Free09, Free11, Free611, Free731, платформа Qinggan, A9, A11, qinggan09, qinggan11 |
-| ядро разработки | Ядро эмулятора Android (development kernel), которое рабочий процесс `kernels` собирает по рецепту из `profiles/common-qinggan-*/`; закреплено в `android.development_kernel` | кастомное ядро |
+| ядро разработки | Ядро эмулятора Android (development kernel), которое рабочий процесс `kernels` собирает по рецепту из `profiles/common-*/components/kernel/`; закреплено в `android.development_kernel` | кастомное ядро |
 | рабочий процесс | Рабочий процесс GitHub Actions в `.github/workflows/` (workflow), например `ci` или `kernels` | процесс⁶, воркфлоу, пайплайн |
 | поставщик контента | `ContentProvider` Android в приложении гостя, адаптируемый рецептом (content provider); не [провайдер](#сеансы-и-api) | контент-провайдер |
 

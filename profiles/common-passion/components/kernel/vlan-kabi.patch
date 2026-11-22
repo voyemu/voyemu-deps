@@ -1,0 +1,22 @@
+--- a/include/linux/netdevice.h
++++ b/include/linux/netdevice.h
+@@ -1942,9 +1942,6 @@
+ 
+ 	/* Protocol-specific pointers */
+ 
+-#if IS_ENABLED(CONFIG_VLAN_8021Q)
+-	struct vlan_info __rcu	*vlan_info;
+-#endif
+ #if IS_ENABLED(CONFIG_NET_DSA)
+ 	struct dsa_port		*dsa_ptr;
+ #endif
+@@ -2100,7 +2097,8 @@
+ 	bool			proto_down;
+ 	unsigned		wol_enabled:1;
+ 
+-	ANDROID_KABI_RESERVE(1);
++	/* 802.1Q state in a reserved slot keeps the frozen KMI layout and symbol CRCs. */
++	ANDROID_KABI_USE(1, struct vlan_info __rcu *vlan_info);
+ 	ANDROID_KABI_RESERVE(2);
+ 	ANDROID_KABI_RESERVE(3);
+ 	ANDROID_KABI_RESERVE(4);

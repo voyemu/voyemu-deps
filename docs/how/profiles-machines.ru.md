@@ -19,7 +19,7 @@
 
 Поле `title` в `profile.json` называет профиль в тексте для людей, например `Free 7.3.1`. Поле `platform` равно `qinggan09` или `qinggan11` для поколения Android 9 или Android 11 [платформы Free/Dreamer](../GLOSSARY.ru.md) либо `passion` для Passion. Поле `board` называет плату мультимедиа: `8155` для Qualcomm SA8155 или `nxp` для NXP i.MX 8QuadMax. Опубликованный профиль без этих полей или с другим значением Voyemu отклоняет.
 
-Общие части лежат вне профилей: `profiles/common/` содержит общие компоненты, шрифты, значки и графику руля, а `profiles/common-qinggan-09/` и `profiles/common-qinggan-11/` — рецепты ядра разработки для каждого поколения Android.
+Общие части лежат вне профилей: `profiles/common/` содержит общие компоненты, шрифты, значки и графику руля, а `profiles/common-qinggan-09/` и `profiles/common-qinggan-11/` — рецепты ядра разработки для каждого поколения Android, `profiles/common-passion/` — вариант рецепта `qinggan-11` для Passion.
 
 Оригиналы в репозиторий не попадают. Пользователь импортирует их в `.local/profiles/<profile>/`, а профиль хранит только их имена, размеры и SHA-256.
 

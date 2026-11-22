@@ -21,14 +21,14 @@ runs:
                   !.local/toolchains/kernel-host
                   !.local/toolchains/kernel-clang
                   .local/build/kernel/base
-              key: toolchains-${{ inputs.set }}-fixtures-${{ inputs.fixture-inputs }}-${{ runner.os }}-${{ hashFiles('src/app/toolchain.json', 'src/prepare/toolchain.json', 'src/prepare/libraries.json', 'src/app/dependencies.lock.json', 'src/app/platform/component.json', 'src/app/api/component.json', 'src/guest/qnx/component.json', 'profiles/common-qinggan-*/components/kernel/component.json', 'src/dev/ci/toolchains.sh', '.github/actions/toolchains/action.yml') }}
+              key: toolchains-${{ inputs.set }}-fixtures-${{ inputs.fixture-inputs }}-${{ runner.os }}-${{ hashFiles('src/app/toolchain.json', 'src/prepare/toolchain.json', 'src/prepare/libraries.json', 'src/app/dependencies.lock.json', 'src/app/platform/component.json', 'src/app/api/component.json', 'src/guest/qnx/component.json', 'profiles/common-*/components/kernel/component.json', 'src/dev/ci/toolchains.sh', '.github/actions/toolchains/action.yml') }}
         - if: startsWith(inputs.set, 'kernel-')
           uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
           with:
               path: |
                   .local/toolchains/kernel-host
                   .local/toolchains/kernel-clang
-              key: kernel-host-${{ inputs.set }}-${{ runner.os }}-${{ hashFiles('src/app/toolchain.json', 'profiles/common-qinggan-*/components/kernel/component.json', 'src/prepare/kernel/*.java') }}
+              key: kernel-host-${{ inputs.set }}-${{ runner.os }}-${{ hashFiles('src/app/toolchain.json', 'profiles/common-*/components/kernel/component.json', 'src/prepare/kernel/*.java') }}
         - if: steps.toolchains.outputs.cache-hit != 'true' && runner.os != 'Windows'
           shell: bash
           run: bash src/dev/ci/toolchains.sh "${{ inputs.set }}" "${{ inputs.fixture-inputs }}"

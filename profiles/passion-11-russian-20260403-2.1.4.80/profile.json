@@ -57,6 +57,28 @@
         "/system/etc/selinux/mapping/30.0.cil": "c14ab911584595a94e6783600371fed23cec1d56b8001383584a3192d028eb60"
       }
     },
+    "development_kernel": {
+      "url": "https://github.com/voyemu/voyemu-deps/releases/download/kernel-passion-6fed3e55/Image",
+      "sha256": "6fed3e555842ff63097d9d54526d301e182e06d71d9243c5759440bb9bbc190a",
+      "abi": "arm64-v8a",
+      "provenance": {
+        "source_revision": "ae78026f427c6692765ce1c2996d0a9cb6e486ef",
+        "source_tree": "3df236134d223718837ff13d6873598b433cea71",
+        "source_content_sha256": "14b4eafe72bd82a94548b5cd1c659c9716ee54ad82892a715946f2a2192eba7a",
+        "normalized_config_sha256": "9bf14d8da0e64ccdf29018e5f1637decc96b866d4799fef869f345ba2e4643e9",
+        "boundary_control_bytes": 176,
+        "kernel_release": "5.4.86-android11-2-00006-gae78026f427c-ab7595864",
+        "toolchain": "Android clang 12.0.5 r416183b build7284624; CFI/LTO retained",
+        "configuration_deviations": [
+          "CONFIG_CC_CAN_LINK unset: host has no Linux userland link sysroot; guest runtime unchanged by this capability probe",
+          "CONFIG_UAPI_HEADER_TEST unset by CONFIG_CC_CAN_LINK; generated kernel UAPI headers still built",
+          "CONFIG_UNUSED_KSYMS_WHITELIST rewritten to same 4 977 symbols from 18 pinned source KMI lists",
+          "CONFIG_VLAN_8021Q=y: OEM vendor config_vlan.sh creates the 802.1Q interfaces eth0.3/4/6/7/10..14 that someipd binds; net_device.vlan_info takes ANDROID_KABI reserved slot 1, so the frozen KMI layout and stock module CRCs stay"
+        ],
+        "stock_module_count": 37,
+        "stock_import_crc_count": 2594
+      }
+    },
     "features": {
       "MultiDisplay": "on",
       "VirtioInput": "on",

@@ -109,3 +109,20 @@ reject foreign-release-base
 reset
 printf '{}\n' > src/app/toolchain.json
 reject missing-release-base
+# The Passion variant kernel is selected by its own platform, independently of the qinggan11 pin.
+shapassion=cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+reset
+INPUT_KERNEL=passion
+reject passion-without-pin
+reset
+write_profile "$passion" passion "$shapassion" "${base}kernel-passion-cccccccc/Image"
+INPUT_KERNEL=passion
+accept passion "$shapassion" manual-passion
+reset
+write_profile "$passion" passion "$shapassion" "${base}kernel-passion-cccccccc/Image"
+GITHUB_REF_TYPE=tag GITHUB_REF_NAME=kernel-passion-cccccccc
+accept passion "$shapassion" tag-passion
+reset
+write_profile "$passion" passion "$shapassion" "${base}kernel-qinggan-11-cccccccc/Image"
+INPUT_KERNEL=passion
+reject passion-url-names-other-kernel

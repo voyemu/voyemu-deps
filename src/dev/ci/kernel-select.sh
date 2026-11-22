@@ -2,7 +2,7 @@
 # Run from the checkout root before installing or building kernel inputs.
 set -euo pipefail
 if [[ "$GITHUB_REF_TYPE" == tag ]]; then
-    [[ "$GITHUB_REF_NAME" =~ ^kernel-(qinggan-(09|11))-([0-9a-f]{8})$ ]] || { echo "Unexpected tag $GITHUB_REF_NAME" >&2; exit 1; }
+    [[ "$GITHUB_REF_NAME" =~ ^kernel-(qinggan-(09|11)|passion)-([0-9a-f]{8})$ ]] || { echo "Unexpected tag $GITHUB_REF_NAME" >&2; exit 1; }
     kernel=${BASH_REMATCH[1]}
 else
     kernel=$INPUT_KERNEL
@@ -10,6 +10,7 @@ fi
 case "$kernel" in
     qinggan-09) platform=qinggan09 ;;
     qinggan-11) platform=qinggan11 ;;
+    passion) platform=passion ;;
     *) echo "Unknown kernel $kernel" >&2; exit 1 ;;
 esac
 # Every profile of the platform that pins a development kernel must pin this one.

@@ -3,7 +3,7 @@
 # checks every SHA-256; with --env it only adds the installed tools of the set to GITHUB_PATH and
 # GITHUB_ENV. The CI workflows and the cache refresh workflow share the sets through
 # .github/actions/toolchains, so each set has one cache content.
-# Usage: src/dev/ci/toolchains.sh [--env] lint|linux|tidy-windows|windows-cross|uncrustify|macos|kernel-qinggan-09|kernel-qinggan-11
+# Usage: src/dev/ci/toolchains.sh [--env] lint|linux|tidy-windows|windows-cross|uncrustify|macos|kernel-qinggan-09|kernel-qinggan-11|kernel-passion
 set -euo pipefail
 cd "$(dirname "$0")/../../.."
 pins=src/app/toolchain.json
@@ -122,7 +122,7 @@ lint_tools() {
 # Kernel inputs: the host clang and GNU make of the NDK, the kernel source archive and, for API 30,
 # the stock kernel and ramdisk; kernel-tool.sh checks the source tree and the stock images by their pins.
 kernel_inputs() {
-    local kernel=$1 url archive ndk recipe definition candidate
+    local kernel=$1 platform=$2 url archive ndk recipe definition candidate
     url=$(jq -er .sdk.archives.linux.ndk.url "$pins")
     archive="$downloads/${url##*/}"
     fetch "$url" "$(jq -er .sdk.archives.linux.ndk.sha256 "$pins")" "$archive"
@@ -132,17 +132,21 @@ kernel_inputs() {
     mv .local/build/tmp/ndk/* "$ndk"
     rm "$archive"
     recipe="profiles/common-$kernel/components/kernel/component.json"
+    # A variant recipe builds the source and the stock base of its base recipe.
+    if [[ "$(jq -r .kind "$recipe")" == development-kernel-variant ]]; then
+        recipe="profiles/$(jq -er .base "$recipe")/components/kernel/component.json"
+    fi
     curl -fsSL --retry 3 -o "$(jq -er "(.source // .inputs).archive_file" "$recipe")" "$(jq -er "(.source // .inputs).url" "$recipe")"
-    if [[ "$kernel" == qinggan-11 ]]; then
-        # Any qinggan11 profile with this kernel names the API 30 image of its stock kernel and ramdisk.
+    if [[ "$(jq -r .android_api "$recipe")" == 30 ]]; then
+        # Any profile of the platform with this kernel names the API 30 image of its stock kernel and ramdisk.
         definition=
         for candidate in profiles/*/profile.json; do
-            if [[ "$(jq -r '.platform' "$candidate")" == qinggan11 ]] && jq -e '.android.development_kernel' "$candidate" > /dev/null; then
+            if [[ "$(jq -r '.platform' "$candidate")" == "$platform" ]] && jq -e '.android.development_kernel' "$candidate" > /dev/null; then
                 definition=$candidate
                 break
             fi
         done
-        [[ -n "$definition" ]] || { echo "No qinggan11 profile pins a development kernel" >&2; exit 1; }
+        [[ -n "$definition" ]] || { echo "No $platform profile pins a development kernel" >&2; exit 1; }
         url=$(jq -er .android.url "$definition")
         archive="$downloads/${url##*/}"
         fetch "$url" "$(jq -er .android.sha256 "$definition")" "$archive"
@@ -264,14 +268,15 @@ case "$set_name" in
         done
         native_sources
         ;;
-    kernel-qinggan-09 | kernel-qinggan-11)
+    kernel-qinggan-09 | kernel-qinggan-11 | kernel-passion)
         if $env_only; then
             echo "JAVA_HOME=$PWD/$(jq -er .optionalTools.linuxBuild.jdk.directory "$pins")" >> "$GITHUB_ENV"
             exit 0
         fi
         host_tool linuxBuild jdk
         host_tool linuxBuild zig
-        kernel_inputs "${set_name#kernel-}"
+        kernel=${set_name#kernel-}
+        kernel_inputs "$kernel" "${kernel/-/}"
         ;;
     *)
         echo "Unknown toolchain set: $set_name" >&2

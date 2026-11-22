@@ -35,7 +35,7 @@ The single terminology reference for Voyemu docs, README, CHANGELOG, SECURITY an
 | toolchain | Pinned build tools: Zig, CMake, Ninja, JDK | — |
 | hardware adapter | A replacement for the vehicle hardware that the OEM QNX images expect, selected by `hardware_adapter` in `profile-qnx.json` | — |
 | Free/Dreamer platform | The multimedia and cluster platform shared by the Voyah Free and Dreamer vehicles, in an Android 9 and an Android 11 generation; code identifiers, hardware adapters and development kernel recipes use the internal designation `qinggan09` and `qinggan11` for them | Free09, Free11, Free611, Free731, Qinggan platform, A9, A11, qinggan09, qinggan11 |
-| development kernel | An Android emulator kernel built from a recipe in `profiles/common-qinggan-*/` by the `kernels` workflow and pinned under `android.development_kernel` | custom kernel |
+| development kernel | An Android emulator kernel built from a recipe in `profiles/common-*/components/kernel/` by the `kernels` workflow and pinned under `android.development_kernel` | custom kernel |
 | workflow | A GitHub Actions workflow in `.github/workflows/`, such as `ci` or `kernels` | — |
 | content provider | An Android `ContentProvider` of a guest application that a recipe adapts; not a [provider](#sessions-and-api) | — |
 
