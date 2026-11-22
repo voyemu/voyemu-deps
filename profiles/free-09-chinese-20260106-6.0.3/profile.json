@@ -30,19 +30,20 @@
       }
     },
     "development_kernel": {
-      "url": "https://github.com/voyemu/voyemu-deps/releases/download/kernel-qinggan-09-0f6e1b40/Image",
-      "sha256": "0f6e1b40166c5fdd42070b7100604e76872df0ea2c73a7d0b65c485fff184df9",
+      "url": "https://github.com/voyemu/voyemu-deps/releases/download/kernel-qinggan-09-97375faf/Image",
+      "sha256": "97375faf94054d929b2e0da1d08e05e3816891ce3788e037b6b64c8e7501b3d2",
       "abi": "arm64-v8a",
       "provenance": {
         "source_revision": "cc24b0a8f68af21e7fc2a6480646866d3ccdf83e",
         "source_tree": "71a22489dcda7d1ab0921f809a1df5255c1b85a5",
         "source_content_sha256": "60cf6cd87848277407fb31ce1d6f3a15d525a735342c4cb8db435ebff18ba50d",
-        "normalized_config_sha256": "7281ca2ed5cc86008bdd0bb292e07e8e7ed61dcc82ff2fa183e519f44f15d01b",
+        "normalized_config_sha256": "6441b66f76b63ccd5740319fa6cdb1f32b45bf10896f9ba3f54560d088a779bd",
         "boundary_control_bytes": 176,
         "kernel_release": "4.4.302",
         "toolchain": "NDK29.0.14206865 Android clang21.0.0 r563880c; not stock compiler",
         "configuration_deviations": [
-          "CONFIG_CRYPTO_USER=n for development CAN netlink protocol21; unchanged from previously accepted custom A9 kernel"
+          "CONFIG_CRYPTO_USER=n for development CAN netlink protocol21; unchanged from previously accepted custom A9 kernel",
+          "CONFIG_SCSI=y, CONFIG_BLK_DEV_SD=y and CONFIG_USB_STORAGE=y for the USB drive on the PCI EHCI controller; olddefconfig adds CONFIG_SCSI_DMA, CONFIG_SCSI_LOWLEVEL and CONFIG_SCSI_PROC_FS"
         ]
       }
     },

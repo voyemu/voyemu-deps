@@ -37,6 +37,30 @@ final class NativeCanKernel {
                     "RELR",
                     "TOOLS_SUPPORT_RELR",
                     "SECURITY_SELINUX");
+    // A9 options set before olddefconfig: CRYPTO_USER frees netlink protocol 21 for the CAN
+    // transport; built-in SCSI disks with USB mass storage attach the USB drive on the PCI EHCI
+    // controller of the emulator.
+    private static final List<String> A9_CONFIG_OPTIONS =
+            List.of(
+                    "--disable",
+                    "CRYPTO_USER",
+                    "--enable",
+                    "SCSI",
+                    "--enable",
+                    "BLK_DEV_SD",
+                    "--enable",
+                    "USB_STORAGE");
+    // A9 deviations from the stock configuration: the options above and the SCSI_DMA,
+    // SCSI_LOWLEVEL and SCSI_PROC_FS defaults that olddefconfig derives from them.
+    private static final Map<String, String> A9_DEVIATIONS =
+            Map.of(
+                    "CONFIG_CRYPTO_USER", "n",
+                    "CONFIG_SCSI", "y",
+                    "CONFIG_SCSI_DMA", "y",
+                    "CONFIG_SCSI_LOWLEVEL", "y",
+                    "CONFIG_SCSI_PROC_FS", "y",
+                    "CONFIG_BLK_DEV_SD", "y",
+                    "CONFIG_USB_STORAGE", "y");
 
     private final Path recipe;
     private final Map<String, Object> component;
@@ -444,7 +468,7 @@ final class NativeCanKernel {
                                 "GENERIC_COMPAT_VDSO",
                                 "--enable",
                                 "RELR")
-                        : List.of("--disable", "CRYPTO_USER"));
+                        : A9_CONFIG_OPTIONS);
         KernelHostTools.command(work, env, config.toArray(String[]::new));
         make(work, env, args, "olddefconfig");
         verifyConfig(output.resolve(".config"));
@@ -506,7 +530,15 @@ final class NativeCanKernel {
 
     private void verifyConfig(Path config) throws IOException {
         var flags = Files.readAllLines(config);
-        var required = api30 ? API30_REQUIRED : List.of("SECURITY_SELINUX", "MODVERSIONS");
+        var required =
+                api30
+                        ? API30_REQUIRED
+                        : List.of(
+                                "SECURITY_SELINUX",
+                                "MODVERSIONS",
+                                "SCSI",
+                                "BLK_DEV_SD",
+                                "USB_STORAGE");
 
         for (String option : required) {
             require(flags.contains("CONFIG_" + option + "=y"), "Kernel mechanism lost: " + option);
@@ -522,6 +554,20 @@ final class NativeCanKernel {
                     !flags.contains("CONFIG_CRYPTO_USER=y"),
                     "CAN protocol21 collides with CRYPTO_USER");
         }
+    }
+
+    // Every stock option keeps its value except A9_DEVIATIONS; options that the deviations make
+    // visible stay unset unless listed there.
+    private static void verifyA9Config(Map<String, String> stock, Map<String, String> actual) {
+        var expected = new LinkedHashMap<>(stock);
+
+        expected.putAll(A9_DEVIATIONS);
+
+        for (var entry : actual.entrySet()) {
+            expected.putIfAbsent(entry.getKey(), "n");
+        }
+
+        require(actual.equals(expected), "Unexpected A9 configuration change");
     }
 
     private static int verifyRelocations(Path file) throws IOException {
@@ -640,12 +686,7 @@ final class NativeCanKernel {
 
             normalized = whitelist(config, "abi_symbollist.raw");
         } else {
-            require(
-                    config.equals(
-                            stock.replaceFirst(
-                                    "(?m)^CONFIG_CRYPTO_USER=y$",
-                                    "# CONFIG_CRYPTO_USER is not set")),
-                    "Unexpected A9 configuration change");
+            verifyA9Config(configValues(stock), configValues(config));
             require(release.equals("4.4.302"), "Unexpected A9 kernel release");
             relocations = verifyRelocations(work.resolve("relocations.txt"));
             normalized = config;
@@ -737,7 +778,11 @@ final class NativeCanKernel {
                     "configuration_deviations",
                     List.of(
                             "CONFIG_CRYPTO_USER=n for development CAN netlink protocol21; unchanged"
-                                    + " from previously accepted custom A9 kernel"));
+                                    + " from previously accepted custom A9 kernel",
+                            "CONFIG_SCSI=y, CONFIG_BLK_DEV_SD=y and CONFIG_USB_STORAGE=y for the"
+                                    + " USB drive on the PCI EHCI controller; olddefconfig adds"
+                                    + " CONFIG_SCSI_DMA, CONFIG_SCSI_LOWLEVEL and"
+                                    + " CONFIG_SCSI_PROC_FS"));
             receipt.put("relocation_types", List.of("R_AARCH64_RELATIVE"));
             receipt.put("relocation_count", relocations);
             receipt.put(

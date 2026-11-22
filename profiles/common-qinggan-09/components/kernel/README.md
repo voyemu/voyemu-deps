@@ -1,6 +1,6 @@
 # Free/Dreamer Android 9 development kernel
 
-Linux 4.4.302 goldfish kernel for the API 28 emulator base of the A9 profiles. Machine preparation replaces the stock `kernel-ranchu` with this Image so the OEM CAN service finds the `cis_can_dev` character device and netlink protocol 21. It is a development kernel for a simulated ECU, not an OEM kernel and not proof of hardware compatibility.
+Linux 4.4.302 goldfish kernel for the API 28 emulator base of the A9 profiles. Machine preparation replaces the stock `kernel-ranchu` with this Image so the OEM CAN service finds the `cis_can_dev` character device and netlink protocol 21, and Android sees the USB drive as a USB mass-storage disk. It is a development kernel for a simulated ECU, not an OEM kernel and not proof of hardware compatibility.
 
 ## Inputs
 
@@ -27,7 +27,7 @@ The `kernels` workflow builds this recipe on Linux, verifies the Image against t
 
 The build runs with a minimal environment: `LC_ALL=C`, `TZ=UTC`, fixed `KBUILD_BUILD_TIMESTAMP`, `KBUILD_BUILD_USER`, `KBUILD_BUILD_HOST` and `KBUILD_BUILD_VERSION`, and `-ffile-prefix-map` for the workspace and the compiler, so neither the Image nor `vmlinux` depends on the build path, user, host or time. `build` refuses to continue if the pinned toybox cannot run, because Kbuild would silently stamp the initramfs with the current time. The embedded configuration is compressed by the pinned gzip.
 
-The normalized configuration equals the stock embedded configuration except `CONFIG_CRYPTO_USER=n`, which frees netlink protocol 21. SELinux and module versioning stay enabled. Linker `-z notext` is retained; the relocation audit permits only `R_AARCH64_RELATIVE` and does not prove runtime page protections.
+The normalized configuration equals the stock embedded configuration except `CONFIG_CRYPTO_USER=n`, which frees netlink protocol 21, and built-in `CONFIG_SCSI`, `CONFIG_BLK_DEV_SD` and `CONFIG_USB_STORAGE`, which with the stock PCI EHCI driver attach the USB drive of the emulator as a SCSI disk; `olddefconfig` adds `CONFIG_SCSI_DMA`, `CONFIG_SCSI_LOWLEVEL` and `CONFIG_SCSI_PROC_FS`, and every other option these make visible stays unset. `publish` checks this exact set. SELinux and module versioning stay enabled. Linker `-z notext` is retained; the relocation audit permits only `R_AARCH64_RELATIVE` and does not prove runtime page protections.
 
 `build-complete.json` binds the component, Image and vmlinux hashes after the source, configuration and relocation checks; `publish` rejects a stale receipt and records `runtime_accepted=false`. A source build is not runtime acceptance: each new Image needs a machine boot, native receiver checks and cold-OFF boundary acceptance.
 
