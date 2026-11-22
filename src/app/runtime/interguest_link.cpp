@@ -674,6 +674,12 @@ struct InterguestLink::Impl {
                             std::vector<std::uint8_t> bytes;
 
                             if (!rx && gateway && gateway->next(bytes, now)) {
+                                // Android runs its own SOME/IP clients on the same VLANs, so it
+                                // sees the gateway's frames too.
+                                if (network.status().connected) {
+                                    network.send(bytes, 10);
+                                }
+
                                 std::memcpy(page->rx, bytes.data(), bytes.size());
 
                                 if (++rxseq == 0) {
@@ -690,6 +696,16 @@ struct InterguestLink::Impl {
                                                           "oversized peer frame");
                                     }
 
+                                    if (gateway) {
+                                        gateway->receive(bytes, now);
+                                    }
+                                }
+
+                                // Unicast from Android to the gateway stays local.
+                                if (!bytes.empty() &&
+                                    !(gateway &&
+                                      std::equal(SomeipGateway::mac.begin(),
+                                                 SomeipGateway::mac.end(), bytes.begin()))) {
                                     std::memcpy(page->rx, bytes.data(), bytes.size());
 
                                     if (++rxseq == 0) {

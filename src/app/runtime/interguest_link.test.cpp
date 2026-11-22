@@ -19,6 +19,7 @@
 #include <sys/stat.h>
 #include <thread>
 #include <unistd.h>
+#include <vector>
 using voyemu::host_qnx_engine;
 using voyemu::InterguestLink;
 using voyemu::qnx_guest_deadline;
@@ -532,7 +533,8 @@ int main(int argc, char **argv) try {
         fail([&] {
             gateway_link.apply_vehicle_state(voyemu::Json{{"raw_oem", voyemu::Json::object()}});
         });
-        gateway_link.start(dir, token);
+        const auto gateway_port = gateway_link.start(dir, token);
+        gateway_link.bind_android(static_cast<std::uint64_t>(getpid()));
         gateway_link.attach_gateway(voyemu::Json::parse(R"({"schema":1,"services":[
             {"name":"VehicleDrivingInfo","vlan":12,"service":8192,"instance":1,"major":1,"events":[
               {"name":"Notify_f_VehicleDrivingInform","event":32769,"eventgroups":[8192],"bytes":24,
@@ -569,6 +571,55 @@ int main(int argc, char **argv) try {
 
         assert(reply && offer && gateway_link.status().sent == 1 &&
                gateway_link.status().fault.empty());
+        // Android's own SOME/IP clients reach the gateway through the link: its ARP request to
+        // the gateway is answered on the Android socket and never reaches the QNX mailbox.
+        int android = peer(gateway_port);
+        wait([&] {
+            return gateway_link.status().connected;
+        });
+        unsigned char request[4 + sizeof arp] = {0, 0, 0, sizeof arp};
+        std::memcpy(request + 4, arp, sizeof arp);
+        request[4] = 0x02;
+        request[5] = 0xdf;
+        request[6] = 0x53;
+        request[7] = request[8] = request[9] = 0;
+        request[4 + 11] = 0x40;
+        request[4 + 31] = 0x40;
+        request[4 + 35] = 40;
+        assert(send(android, request, sizeof request, 0) == static_cast<ssize_t>(sizeof request));
+        bool answered = false;
+
+        for (int i = 0; i < 8 && !answered; ++i) {
+            unsigned char head[4];
+            unsigned got = 0;
+
+            while (got < 4) {
+                const auto n = recv(android, head + got, 4 - got, 0);
+                assert(n > 0);
+                got += static_cast<unsigned>(n);
+            }
+
+            std::vector<unsigned char> body((head[2] << 8) | head[3]);
+            got = 0;
+
+            while (got < body.size()) {
+                const auto n = recv(android, body.data() + got, body.size() - got, 0);
+                assert(n > 0);
+                got += static_cast<unsigned>(n);
+            }
+
+            answered = body.size() >= 46 && body[16] == 0x08 && body[17] == 0x06 && body[25] == 2 &&
+                       body[5] == 0x40 && body.size() >= 46 && body[45] == 40;
+
+            if (__atomic_load_n(&gw[3], __ATOMIC_ACQUIRE) != 0) {
+                const auto *rx = gp + 1600;
+                assert(!(rx[0] == 0x02 && rx[1] == 0xdf && rx[2] == 0x53));
+                __atomic_store_n(&gw[3], 0, __ATOMIC_RELEASE);
+            }
+        }
+
+        assert(answered && gateway_link.status().fault.empty());
+        close(android);
         gateway_link.stop();
         munmap(g, 16384);
     }
