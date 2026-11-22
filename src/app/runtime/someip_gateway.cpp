@@ -328,12 +328,18 @@ void SomeipGateway::receive(std::span<const std::uint8_t> frame, Clock::time_poi
     if (port == sd_port && (to == own || to == sd_group)) {
         sd(vlan, from, source_port, udp.subspan(8), now);
     } else if (port == event_port && to == own) {
-        request(vlan, from, source_port, udp.subspan(8));
+        request(vlan, from, source_port, udp.subspan(8), now);
     }
 }
 
+bool SomeipGateway::yielded(std::size_t service, Clock::time_point now) const {
+    const auto offer = yielded_.find(service);
+
+    return offer != yielded_.end() && offer->second > now;
+}
+
 void SomeipGateway::request(unsigned vlan, const Address &source, std::uint16_t port,
-                            std::span<const std::uint8_t> message) {
+                            std::span<const std::uint8_t> message, Clock::time_point now) {
     // A REQUEST to an offered service; an unknown method gets E_UNKNOWN_METHOD.
     if (message.size() < 16 || message[12] != 1 || message[14] != 0x00 ||
         get(message, 4, 4) + 8 > message.size()) {
@@ -349,6 +355,10 @@ void SomeipGateway::request(unsigned vlan, const Address &source, std::uint16_t 
 
         if (service.vlan != vlan || service.id != id) {
             continue;
+        }
+
+        if (yielded(s, now)) {
+            return;
         }
 
         for (std::size_t m = 0; m < service.methods.size(); ++m) {
@@ -421,7 +431,19 @@ void SomeipGateway::sd(unsigned vlan, const Address &source, std::uint16_t port,
                 continue;
             }
 
-            if (type == 0x00) {
+            if (type == 0x01) {
+                // Another station offers the service: drop its subscribers until the offer ends.
+                if (ttl == 0) {
+                    yielded_.erase(s);
+                } else {
+                    yielded_[s] = now + std::chrono::seconds(ttl);
+                    std::erase_if(subscribers_, [&](const Subscriber &item) {
+                        return item.service == s;
+                    });
+                }
+            } else if (yielded(s, now)) {
+                continue;
+            } else if (type == 0x00) {
                 offer(vlan, s, source, port, true);
             } else if (type == 0x06) {
                 const auto group = static_cast<std::uint16_t>(get(entry, 14, 2));
@@ -569,6 +591,9 @@ bool SomeipGateway::next(std::vector<std::uint8_t> &frame, Clock::time_point now
     std::erase_if(subscribers_, [&](const Subscriber &item) {
         return item.expires <= now;
     });
+    std::erase_if(yielded_, [&](const auto &offer) {
+        return offer.second <= now;
+    });
 
     for (const auto &service : contract_.services) {
         auto &due = next_offer_[service.vlan];
@@ -577,7 +602,7 @@ bool SomeipGateway::next(std::vector<std::uint8_t> &frame, Clock::time_point now
             due = now + offer_period;
 
             for (std::size_t s = 0; s < contract_.services.size(); ++s) {
-                if (contract_.services[s].vlan == service.vlan) {
+                if (contract_.services[s].vlan == service.vlan && !yielded(s, now)) {
                     offer(service.vlan, s, sd_group, sd_port, false);
                 }
             }

@@ -50,7 +50,9 @@ Json someip_contract_json(const SomeipContract &contract);
 // 172.16.(100+VLAN).10 on each VLAN. It answers ARP and service discovery, acknowledges
 // eventgroup subscriptions and sends notifications, E2E profile 7 protected where the payload
 // carries the header (DataID = service << 16 | event). Field getter requests are answered from the
-// same state.
+// same state. Some services the cluster consumes are offered by the Android someipd in the car,
+// AndroidGeneralService 0x1012 on VLAN 10 among them; the gateway offers them in its stead until
+// another station offers the service on that VLAN and yields it while that offer lives.
 class SomeipGateway {
 public:
     using Clock = std::chrono::steady_clock;
@@ -92,13 +94,16 @@ private:
     std::map<std::pair<unsigned, std::array<std::uint8_t, 4>>, Station> stations_;
     std::deque<std::vector<std::uint8_t>> queue_;
     std::map<unsigned, Clock::time_point> next_offer_;
+    // Services another station offers, until its offer expires.
+    std::map<std::size_t, Clock::time_point> yielded_;
     Clock::time_point next_cycle_{};
     std::uint16_t sd_session_ = 0, event_session_ = 0, ip_id_ = 0;
 
     void sd(unsigned vlan, const std::array<std::uint8_t, 4> &source, std::uint16_t port,
             std::span<const std::uint8_t> message, Clock::time_point now);
     void request(unsigned vlan, const std::array<std::uint8_t, 4> &source, std::uint16_t port,
-                 std::span<const std::uint8_t> message);
+                 std::span<const std::uint8_t> message, Clock::time_point now);
+    bool yielded(std::size_t service, Clock::time_point now) const;
     void send_udp(unsigned vlan, const std::array<std::uint8_t, 4> &destination,
                   std::uint16_t source_port, std::uint16_t port,
                   std::span<const std::uint8_t> payload);

@@ -225,6 +225,32 @@ int main() try {
     assert(frames.size() == 1 && get(udp_payload(frames[0]), 2, 2) == 0x8001);
     frames = drain(gateway, now + std::chrono::seconds(6));
     assert(gateway.subscriptions() == 0 && frames.size() == 2);
+
+    // Another station's offer of a gateway service, as the Android someipd offers its own in the
+    // car: the gateway drops the subscription, stops offering and answering it while the offer
+    // lives, and keeps its other services.
+    auto later = now + std::chrono::seconds(7);
+    gateway.receive(sd(gateway_ip, entry(0x06, 0x2000, 30, 0x2000, 1), endpoint), later);
+    assert(drain(gateway, later).size() == 5 && gateway.subscriptions() == 1);
+    gateway.receive(sd(group, entry(0x01, 0x2000, 3, 0, 1), endpoint), later);
+    assert(gateway.subscriptions() == 0);
+    frames = drain(gateway, later + std::chrono::seconds(1));
+    assert(frames.size() == 1 && get(frames[0], 14, 2) == (7 << 13 | 14));
+    gateway.receive(sd(group, entry(0x00, 0x2000, 3, 0, 0), {}), later);
+    gateway.receive(sd(gateway_ip, entry(0x06, 0x2000, 5, 0x2000, 1), endpoint), later);
+    gateway.receive(request(0x2000, 1), later);
+    assert(drain(gateway, later).empty() && gateway.subscriptions() == 0);
+    // StopOffer ends the yield at once; an expired offer ends it too.
+    gateway.receive(sd(group, entry(0x01, 0x2000, 0, 0, 1), endpoint), later);
+    gateway.receive(sd(group, entry(0x00, 0x2000, 3, 0, 0), {}), later);
+    assert(drain(gateway, later).size() == 1);
+    gateway.receive(sd(group, entry(0x01, 0x2000, 3, 0, 1), endpoint), later);
+    gateway.receive(request(0x2000, 1), later + std::chrono::seconds(2));
+    frames = drain(gateway, later + std::chrono::seconds(2));
+    assert(frames.size() == 1 && get(frames[0], 14, 2) == (7 << 13 | 14));
+    gateway.receive(request(0x2000, 1), later + std::chrono::seconds(4));
+    frames = drain(gateway, later + std::chrono::seconds(4));
+    assert(frames.size() == 3 && get(udp_payload(frames[0]), 0, 4) == 0x20000001);
     // Only a Passion catalogue state is applied.
     auto other = state(1);
     other["map_sha256"] = qinggan09_map_sha256;
