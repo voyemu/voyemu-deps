@@ -43,6 +43,7 @@ set(CASES_qinggan11_611
     "AudioPolicyGuardTest ${F611} ORIGINAL:${F611}/AudioPolicy-release.apk WORK ORIGINAL:${F731}/AudioPolicy-release.apk ORIGINAL:${F611}/framework/QGAPI.jar profiles/${F611}/patches/api30-audio-policy.json"
     "CameraVirtualGuardTest ${F611} ORIGINAL:${F611}/Camera.apk ORIGINAL:${F611}/Camera.apk ORIGINAL:${F731}/Camera.apk"
     "LauncherCanbusRecomputedTest ORIGINAL:${F611}/Launcher.apk ORIGINAL:${F731}/Launcher.apk"
+    "InterguestStartupGuardTest ANDROID:${F611}/system/system/framework/services.jar"
     "StartupVolumeGuardTest ${F611} ANDROID:${F611}/system/system/framework/services.jar NEW"
     "Api30SystemPolicyCarLibraryTest ROOT ANDROID:${F611}/system/system/framework/framework.jar ORIGINAL:${F611}/SystemPolicy-release.apk ORIGINAL:${F611}/framework/QGAPI.jar ORIGINAL:${F611}/framework/QGMOD.jar ORIGINAL:${F611}/framework/android.car.jar ORIGINAL:${F611}/framework/framework.jar ORIGINAL:${F731}/SystemPolicy-release.apk ORIGINAL:${F731}/framework/QGAPI.jar ORIGINAL:${F731}/framework/QGMOD.jar ORIGINAL:${F731}/framework/android.car.jar ORIGINAL:${F731}/framework/framework.jar")
 set(CASES_qinggan11_731
@@ -75,6 +76,7 @@ set(CASES_qinggan11_731
     "MediaCloudManifestGuardTest ORIGINAL:${F731}/QGMedia.apk ORIGINAL:${F611}/QGMedia.apk WORK"
     "NaviVinGuardTest ORIGINAL:${F731}/Navi.apk"
     "OriginalNaviVinChainTest ORIGINAL:${F731}/framework/QGAPI.jar"
+    "InterguestStartupGuardTest ANDROID:${F731}/system/system/framework/services.jar"
     "SecondaryNavigationGuardTest ANDROID:${F731}/system/system/framework/services.jar NEW"
     "StartupVolumeGuardTest ${F731} ANDROID:${F731}/system/system/framework/services.jar NEW")
 set(CASES_passion
