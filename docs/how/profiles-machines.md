@@ -27,7 +27,7 @@ The `wheel` field of `profile.json` names the steering-wheel artwork in `assets`
 
 Shared parts live outside the profiles: `profiles/common/` holds common components, icons and steering-wheel artwork, and `profiles/common-qinggan-09/` and `profiles/common-qinggan-11/` hold the development kernel recipes of each Android generation.
 
-The `fonts` field of `profile.json` names the fonts of the vehicle that the [window](window.md#fonts) draws with: `latin` for Latin and Cyrillic and `cjk` for Chinese, each with `regular`, `medium` and `bold`. A font is an OEM input of the profile, a file inside an OEM APK or a file of an imported QNX image, each with its size and SHA-256.
+The `fonts` field of `profile.json` names the fonts of the vehicle that the [window](window.md#fonts) draws with: `primary` for all text and `fallback` for the characters the primary font lacks, each with `regular`, `medium` and `bold`. A font is an OEM input of the profile or a file inside an OEM APK, each with its size and SHA-256.
 
 OEM inputs never enter the repository. The user imports them into `.local/profiles/<profile>/`, and the profile records only their names, sizes and SHA-256.
 

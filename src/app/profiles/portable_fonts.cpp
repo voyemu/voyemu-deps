@@ -5,7 +5,6 @@
 #include "os/platform.hpp"
 #include "portable_resources.hpp"
 #include "process.hpp"
-#include "qnx6_file.hpp"
 #include "zip_archive.hpp"
 #include <fstream>
 #include <map>
@@ -55,29 +54,17 @@ std::string source_font(const std::filesystem::path &root, const Json &definitio
         return read_file(file);
     }
 
+    need(names == std::set<std::string>{"original", "entry", "bytes", "sha256"},
+         "font declaration required");
     const auto bytes = font.at("bytes").get<std::uint64_t>();
     const auto sha256 = font.at("sha256").get<std::string>();
     need(bytes > 0 && bytes <= portable_resource_limit("ui/fonts/") && sha256_text(sha256),
          "bounded pinned font required");
-    std::string data;
-
-    if (names == std::set<std::string>{"original", "entry", "bytes", "sha256"}) {
-        const auto &original = definition.at("original").at(font.at("original").get<std::string>());
-        data = read_pinned_zip_entry(profile_originals_directory(root, profile) /
-                                             original.at("file").get<std::string>(),
-                                     original.at("sha256").get<std::string>(),
-                                     font.at("entry").get<std::string>(), sha256, bytes);
-    } else {
-        need(names == std::set<std::string>{"qnx", "path", "bytes", "sha256"},
-             "font declaration required");
-        const auto image = font.at("qnx").get<std::string>();
-        const auto qnx = read_private_json(
-                root / "profiles" / std::string(profile) / "profile-qnx.json", 128 * 1024);
-        data = read_qnx6_file(qnx_originals_directory(root, profile) / image,
-                              qnx.at("originals").at(image).at("sha256").get<std::string>(),
-                              font.at("path").get<std::string>());
-    }
-
+    const auto &original = definition.at("original").at(font.at("original").get<std::string>());
+    const auto data = read_pinned_zip_entry(profile_originals_directory(root, profile) /
+                                                    original.at("file").get<std::string>(),
+                                            original.at("sha256").get<std::string>(),
+                                            font.at("entry").get<std::string>(), sha256, bytes);
     need(data.size() == bytes && sha256_bytes(data) == sha256, "imported font differs");
 
     return data;
@@ -133,14 +120,15 @@ Json export_portable_fonts(const std::filesystem::path &root, const Json &defini
     }
 
     const auto &fonts = definition.at("fonts");
-    need(fonts.is_object() && fonts.size() == 2 && fonts.contains("latin") && fonts.contains("cjk"),
-         "latin and cjk fonts required");
+    need(fonts.is_object() && fonts.size() == 2 && fonts.contains("primary") &&
+                 fonts.contains("fallback"),
+         "primary and fallback fonts required");
     const auto stage = seed / "ui/fonts/.stage";
     ensure_private_directory(stage);
     std::map<std::string, std::string> sources;
 
-    for (const auto *script : {"latin", "cjk"}) {
-        const auto &weights = fonts.at(script);
+    for (const auto *role : {"primary", "fallback"}) {
+        const auto &weights = fonts.at(role);
         need(weights.is_object() && weights.size() == 3 && weights.contains("regular") &&
                      weights.contains("medium") && weights.contains("bold"),
              "regular, medium and bold fonts required");
@@ -161,7 +149,7 @@ Json export_portable_fonts(const std::filesystem::path &root, const Json &defini
                 found = sources.emplace(key, std::move(data)).first;
             }
 
-            const auto name = std::string("ui/fonts/") + script + "-" + weight + ".ttf";
+            const auto name = std::string("ui/fonts/") + role + "-" + weight + ".ttf";
             const auto &data = found->second;
             {
                 std::ofstream file(seed / portable_resource_relative(name), std::ios::binary);

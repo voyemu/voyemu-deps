@@ -81,7 +81,39 @@
     "androidRoutes": "src/app/android-wheel-routes.json"
   },
   "fonts": {
-    "latin": {
+    "primary": {
+      "regular": {
+        "original": "VehicleAir",
+        "entry": "assets/fonts/HuaKangJinGangHei-Regular-2.ttf",
+        "bytes": 1697868,
+        "sha256": "b90b145194f1206b3d515e05d2bc2f27f2411aa0b6897f61755d7b812fe083c1",
+        "corrected": {
+          "bytes": 1712860,
+          "sha256": "5e153c90eacd1b880ffdf73d31c6315a584939506d26ebdae94cdc6a0a127f56"
+        }
+      },
+      "medium": {
+        "original": "VehicleAir",
+        "entry": "assets/fonts/DFPKingGothicGB-Semibold-2.ttf",
+        "bytes": 1644272,
+        "sha256": "305f942097a1b65d1dca1c357c0197acf62346eea83e2fbe95cc55f62821f000",
+        "corrected": {
+          "bytes": 1644264,
+          "sha256": "84d6244d9b3b9550f4b29012e8b936618109535215a0edfe2bf328e10bf08c8f"
+        }
+      },
+      "bold": {
+        "original": "VehicleAir",
+        "entry": "assets/fonts/DFPKingGothicGB-Semibold-2.ttf",
+        "bytes": 1644272,
+        "sha256": "305f942097a1b65d1dca1c357c0197acf62346eea83e2fbe95cc55f62821f000",
+        "corrected": {
+          "bytes": 1644264,
+          "sha256": "84d6244d9b3b9550f4b29012e8b936618109535215a0edfe2bf328e10bf08c8f"
+        }
+      }
+    },
+    "fallback": {
       "regular": {
         "original": "FontRobotoRegular"
       },
@@ -90,38 +122,6 @@
       },
       "bold": {
         "original": "FontRobotoBold"
-      }
-    },
-    "cjk": {
-      "regular": {
-        "original": "VehicleAir",
-        "entry": "assets/fonts/HuaKangJinGangHei-Regular-2.ttf",
-        "bytes": 1697868,
-        "sha256": "b90b145194f1206b3d515e05d2bc2f27f2411aa0b6897f61755d7b812fe083c1",
-        "corrected": {
-          "bytes": 1712864,
-          "sha256": "4f03e27101265730adf4634746350eb44aef725e8d8601a48a366a03cf8b6bd0"
-        }
-      },
-      "medium": {
-        "original": "VehicleAir",
-        "entry": "assets/fonts/DFPKingGothicGB-Semibold-2.ttf",
-        "bytes": 1644272,
-        "sha256": "305f942097a1b65d1dca1c357c0197acf62346eea83e2fbe95cc55f62821f000",
-        "corrected": {
-          "bytes": 1644272,
-          "sha256": "e8e460cdb59f41367d7c345aa1004f7d65c14c27685e60da5646a1385e846777"
-        }
-      },
-      "bold": {
-        "original": "VehicleAir",
-        "entry": "assets/fonts/DFPKingGothicGB-Semibold-2.ttf",
-        "bytes": 1644272,
-        "sha256": "305f942097a1b65d1dca1c357c0197acf62346eea83e2fbe95cc55f62821f000",
-        "corrected": {
-          "bytes": 1644272,
-          "sha256": "e8e460cdb59f41367d7c345aa1004f7d65c14c27685e60da5646a1385e846777"
-        }
       }
     }
   },

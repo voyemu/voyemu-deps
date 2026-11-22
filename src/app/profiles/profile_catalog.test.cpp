@@ -531,13 +531,11 @@ int main(int argc, char **argv) {
             const auto fonts = original.value("fonts", Json::object());
 
             // The window draws with the car fonts that every machine carries.
-            for (const auto *script : {"latin", "cjk"}) {
+            for (const auto *role : {"primary", "fallback"}) {
                 for (const auto *weight : {"regular", "medium", "bold"}) {
-                    check(fonts.size() == 2 && fonts.contains(script) &&
-                                  fonts.at(script).size() == 3 &&
-                                  fonts.at(script).contains(weight) &&
-                                  (fonts.at(script).at(weight).contains("original") ||
-                                   fonts.at(script).at(weight).contains("qnx")),
+                    check(fonts.size() == 2 && fonts.contains(role) && fonts.at(role).size() == 3 &&
+                                  fonts.at(role).contains(weight) &&
+                                  fonts.at(role).at(weight).contains("original"),
                           "every profile declares the car fonts of the window");
                 }
             }

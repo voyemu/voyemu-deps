@@ -11,6 +11,9 @@ namespace voyemu::cluster {
 namespace {
 constexpr std::array<const char *, 3> face_names{"Regular", "Medium", "Bold"};
 std::array<float, 3> heights_per_em{1, 1, 1};
+// The rendered cap height per ascent to descent height of Inter Regular, for which the layout of
+// the window was measured.
+constexpr float cap_reference = .605f;
 
 [[noreturn]] void rebuild(const std::filesystem::path &file) {
     throw VoyemuError("UI_FONT", file.filename().string() +
@@ -70,8 +73,8 @@ std::optional<float> height_per_em(const std::filesystem::path &file) {
     return float(ascent - descent) / float(big_endian(em, 2));
 }
 
-// The Latin, Russian and symbol glyphs that the window shows.
-bool covers_latin(ImFont *font) {
+// The Latin, Russian, symbol and Chinese glyphs that the window shows.
+bool covers_ui(ImFont *font) {
     for (ImWchar c = 0x20; c <= 0x7e; ++c) {
         if (!font->IsGlyphInFont(c)) {
             return false;
@@ -94,7 +97,7 @@ bool covers_latin(ImFont *font) {
     return true;
 }
 
-ImFont *add_face(const std::filesystem::path &file, const char *name, bool merge) {
+ImFont *add_face(const std::filesystem::path &file, const char *name, bool merge, float scale) {
     if (!std::filesystem::is_regular_file(file)) {
         rebuild(file);
     }
@@ -102,6 +105,7 @@ ImFont *add_face(const std::filesystem::path &file, const char *name, bool merge
     const auto utf8 = file.u8string();
     ImFontConfig config;
     config.MergeMode = merge;
+    config.ExtraSizeScale = scale;
 
     if (name) {
         std::snprintf(config.Name, sizeof(config.Name), "%s", name);
@@ -116,28 +120,49 @@ ImFont *add_face(const std::filesystem::path &file, const char *name, bool merge
 
     return font;
 }
+
+// The rendered height of H per ascent to descent height of a face; faces differ in it, so a face
+// drawn at size * cap_reference / cap_height(face) has the cap height of the layout.
+// A face without H has none.
+std::optional<float> cap_height(const std::filesystem::path &file) {
+    constexpr float probe = 200;
+    auto *font = add_face(file, "cap probe", false, 1);
+    const auto *glyph = font->GetFontBaked(probe)->FindGlyphNoFallback('H');
+    const float height = glyph ? (glyph->Y1 - glyph->Y0) / probe : 0;
+
+    ImGui::GetIO().Fonts->RemoveFont(font);
+
+    return height > 0 ? std::optional(height) : std::nullopt;
+}
 } // namespace
 
 void load_ui_fonts(const std::filesystem::path &directory) {
     ImFont *regular = nullptr;
 
-    // The Latin and Cyrillic face comes first, so its glyphs, « and » among them, win over those
-    // of the Chinese face merged after it.
+    // The primary face of the car comes first, so its glyphs win; the fallback face merged after it
+    // adds the glyphs it lacks, such as « and » of DFP King Gothic GB.
     for (std::size_t weight = 0; weight < ui_font_weights.size(); ++weight) {
-        const auto latin = directory / (std::string("latin-") + ui_font_weights[weight] + ".ttf"),
-                   chinese = directory / (std::string("cjk-") + ui_font_weights[weight] + ".ttf");
-        auto *face = add_face(latin, face_names[weight], false);
-        const auto height = height_per_em(latin);
+        const auto primary = directory /
+                             (std::string("primary-") + ui_font_weights[weight] + ".ttf");
+        const auto fallback = directory /
+                              (std::string("fallback-") + ui_font_weights[weight] + ".ttf");
+        const auto primary_cap = cap_height(primary), fallback_cap = cap_height(fallback);
+        const auto height = height_per_em(primary);
 
-        if (!height || !covers_latin(face)) {
-            rebuild(latin);
+        if (!primary_cap || !height) {
+            rebuild(primary);
         }
 
-        heights_per_em[weight] = *height;
-        add_face(chinese, nullptr, true);
+        // A fallback face without Latin capitals keeps the scale of its primary face.
+        const float primary_scale = cap_reference / *primary_cap,
+                    fallback_scale = fallback_cap ? cap_reference / *fallback_cap : primary_scale;
+        auto *face = add_face(primary, face_names[weight], false, primary_scale);
 
-        if (!face->IsGlyphInFont(0x4e2d) || !face->IsGlyphInFont(0x6587)) {
-            rebuild(chinese);
+        heights_per_em[weight] = *height / primary_scale;
+        add_face(fallback, nullptr, true, fallback_scale);
+
+        if (!covers_ui(face)) {
+            rebuild(primary);
         }
 
         regular = regular ? regular : face;

@@ -57,9 +57,9 @@ int main(int argc, char **argv) try {
     const auto root = std::filesystem::absolute(argv[2]) / ("portable-fonts-" + random_token());
     const std::string profile = "synthetic-fonts";
     const auto originals = root / ".local/profiles" / profile / "originals";
-    const auto latin = read(fixtures / "latin-regular.ttf"),
-               bold = read(fixtures / "latin-bold.ttf"),
-               chinese = read(fixtures / "cjk-regular.ttf");
+    const auto latin = read(fixtures / "primary-regular.ttf"),
+               bold = read(fixtures / "primary-bold.ttf"),
+               chinese = read(fixtures / "fallback-regular.ttf");
     const auto package = apk("res/font/regular.ttf", chinese);
     put(originals / "fonts/latin-regular.ttf", latin);
     put(originals / "fonts/latin-bold.ttf", bold);
@@ -80,21 +80,21 @@ int main(int argc, char **argv) try {
                          {"Bold", original("fonts/latin-bold.ttf", bold)},
                          {"App", original("App.apk", package)}}},
                        {"fonts",
-                        {{"latin",
+                        {{"primary",
                           {{"regular", {{"original", "Regular"}}},
                            {"medium", {{"original", "Bold"}}},
                            {"bold", {{"original", "Bold"}}}}},
-                         {"cjk", {{"regular", entry}, {"medium", entry}, {"bold", entry}}}}}};
+                         {"fallback", {{"regular", entry}, {"medium", entry}, {"bold", entry}}}}}};
     const auto seed = root / "machine";
     std::filesystem::create_directories(seed / "ui");
     const auto resources = export_portable_fonts(root, definition, profile, seed);
     check(resources.size() == 6, "six faces of a machine");
 
-    for (const auto &[name, expected] : {std::pair{"ui/fonts/latin-regular.ttf", &latin},
-                                         std::pair{"ui/fonts/latin-medium.ttf", &bold},
-                                         std::pair{"ui/fonts/latin-bold.ttf", &bold},
-                                         std::pair{"ui/fonts/cjk-regular.ttf", &chinese},
-                                         std::pair{"ui/fonts/cjk-bold.ttf", &chinese}}) {
+    for (const auto &[name, expected] : {std::pair{"ui/fonts/primary-regular.ttf", &latin},
+                                         std::pair{"ui/fonts/primary-medium.ttf", &bold},
+                                         std::pair{"ui/fonts/primary-bold.ttf", &bold},
+                                         std::pair{"ui/fonts/fallback-regular.ttf", &chinese},
+                                         std::pair{"ui/fonts/fallback-bold.ttf", &chinese}}) {
         check(read(seed / name) == *expected &&
                       resources.at(name) == Json{{"file", name},
                                                  {"bytes", expected->size()},
@@ -109,7 +109,7 @@ int main(int argc, char **argv) try {
           "a profile without fonts exports none");
 
     auto changed = definition;
-    changed["fonts"]["cjk"]["bold"]["sha256"] = std::string(64, 'a');
+    changed["fonts"]["fallback"]["bold"]["sha256"] = std::string(64, 'a');
     std::filesystem::remove_all(seed / "ui/fonts");
     check(!failure([&] {
                (void)export_portable_fonts(root, changed, profile, seed);
@@ -117,11 +117,11 @@ int main(int argc, char **argv) try {
           "an APK entry that differs from its pin stops the build");
 
     changed = definition;
-    changed["fonts"]["latin"].erase("medium");
+    changed["fonts"]["primary"].erase("medium");
     check(failure([&] {
               (void)export_portable_fonts(root, changed, profile, seed);
           }).starts_with("PORTABLE_FONTS: "),
-          "every weight of each script is required");
+          "every weight of each role is required");
 
     put(originals / "fonts/latin-bold.ttf", latin);
     check(failure([&] {

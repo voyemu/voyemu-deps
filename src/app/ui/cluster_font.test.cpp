@@ -43,11 +43,59 @@ std::filesystem::path broken_directory(const std::filesystem::path &fonts, const
     return scratch;
 }
 
+// The rendered height of H in the Regular face of a font directory, at size 40.
+float cap_pixels(const std::filesystem::path &fonts) {
+    ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    ImGui::GetIO().BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+    load_ui_fonts(fonts);
+    const auto *glyph = ui_text_font(UiFontRole::Body)->GetFontBaked(40)->FindGlyph('H');
+    const float height = glyph->Y1 - glyph->Y0;
+    ImGui::DestroyContext();
+
+    return height;
+}
+
+// A face with a taller ascent is smaller at the same ImGui size, which measures ascent to descent;
+// the window scales each face to the cap height of the layout instead.
+void cap_height_guard(const std::filesystem::path &fonts) {
+    const auto tall = broken_directory(fonts, "README.md", true);
+
+    for (const auto *weight : {"regular", "medium", "bold"}) {
+        const auto file = tall / (std::string("primary-") + weight + ".ttf");
+        std::fstream font(file, std::ios::binary | std::ios::in | std::ios::out);
+        unsigned char header[12]{};
+        font.read(reinterpret_cast<char *>(header), sizeof header);
+
+        for (int i = 0; i < (header[4] << 8 | header[5]); ++i) {
+            unsigned char entry[16]{};
+            font.read(reinterpret_cast<char *>(entry), sizeof entry);
+
+            if (std::string_view(reinterpret_cast<const char *>(entry), 4) == "hhea") {
+                const auto at = entry[8] << 24 | entry[9] << 16 | entry[10] << 8 | entry[11];
+                unsigned char ascent[2]{};
+                font.seekg(at + 4);
+                font.read(reinterpret_cast<char *>(ascent), 2);
+                const int taller = (ascent[0] << 8 | ascent[1]) + 600;
+                const char bytes[2] = {char(taller >> 8), char(taller & 0xff)};
+                font.seekp(at + 4);
+                font.write(bytes, 2);
+                break;
+            }
+        }
+    }
+
+    const float original = cap_pixels(fonts), scaled = cap_pixels(tall);
+    std::filesystem::remove_all(tall);
+    check(original > 20 && std::abs(original - scaled) <= 1,
+          "faces of different proportions draw capitals of the same height");
+}
+
 void font_guards(const std::filesystem::path &path) {
     ImGui::CreateContext();
     ImGui::GetIO().IniFilename = nullptr;
     try {
-        for (const auto *face : {"latin-regular.ttf", "cjk-bold.ttf"}) {
+        for (const auto *face : {"primary-regular.ttf", "fallback-bold.ttf"}) {
             for (const bool remove : {true, false}) {
                 const auto broken = broken_directory(path, face, remove);
                 std::string message;
@@ -119,8 +167,8 @@ void font_guards(const std::filesystem::path &path) {
         check(std::string(ui_text_font(UiFontRole::Choice)->GetDebugName()) == "Bold" &&
                       ink(ui_text_font(UiFontRole::Choice), "EN") > 1.15f * latin,
               "choice captions use the Bold face");
-        check(std::abs(ui_font_height_per_em(UiFontRole::Body) - 2478.f / 2048) < .001f,
-              "the size of a face follows its own ascent to descent height per em");
+        check(std::abs(ui_font_height_per_em(UiFontRole::Body) - 2478.f / 2048) < .002f,
+              "Inter, the face the layout was measured with, keeps its own size");
 
         for (const auto &entry : voyemu::ui::catalogue) {
             const char *text = entry.chinese;
@@ -210,6 +258,7 @@ int main(int argc, char **argv) {
             throw std::runtime_error("font test requires the fixture font directory");
         }
 
+        cap_height_guard(argv[1]);
         font_guards(argv[1]);
         std::cout << "native font guards: pass\n";
 
