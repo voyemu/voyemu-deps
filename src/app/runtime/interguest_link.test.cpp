@@ -538,7 +538,8 @@ int main(int argc, char **argv) try {
         gateway_link.attach_gateway(voyemu::Json::parse(R"({"schema":1,"services":[
             {"name":"VehicleDrivingInfo","vlan":12,"service":8192,"instance":1,"major":1,"events":[
               {"name":"Notify_f_VehicleDrivingInform","event":32769,"eventgroups":[8192],"bytes":24,
-               "e2e":true,"fields":[{"name":"VehicleSpeed","offset":20,"bytes":4}]}]}]})"));
+               "e2e":true,"fields":[{"name":"VehicleSpeed","offset":20,"bytes":4}]}],
+             "methods":[]}]})"));
         assert(gateway_link.apply_vehicle_state(
                        voyemu::Json{{"map_sha256", voyemu::passion_map_sha256},
                                     {"raw_oem", {{"VehicleSpeed", 1}}}}) == 1);

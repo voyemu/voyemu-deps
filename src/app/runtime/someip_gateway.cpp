@@ -42,15 +42,16 @@ void put_at(std::span<std::uint8_t> out, std::size_t at, std::uint64_t value, un
 }
 
 // SOME/IP header: service, method, length, client, session, protocol 1, interface, type, code.
-std::vector<std::uint8_t> someip(std::uint16_t service, std::uint16_t method, std::uint16_t session,
-                                 std::uint8_t interface, std::span<const std::uint8_t> payload) {
+std::vector<std::uint8_t> someip(std::uint16_t service, std::uint16_t method, std::uint16_t client,
+                                 std::uint16_t session, std::uint8_t interface, std::uint8_t type,
+                                 std::uint8_t code, std::span<const std::uint8_t> payload) {
     std::vector<std::uint8_t> out;
     put(out, service, 2);
     put(out, method, 2);
     put(out, 8 + payload.size(), 4);
-    put(out, 0, 2);
+    put(out, client, 2);
     put(out, session, 2);
-    out.insert(out.end(), {1, interface, 0x02, 0x00});
+    out.insert(out.end(), {1, interface, type, code});
     out.insert(out.end(), payload.begin(), payload.end());
 
     return out;
@@ -60,6 +61,63 @@ std::uint16_t next_session(std::uint16_t &session) {
     session = session == 0xffff ? 1 : session + 1;
 
     return session;
+}
+
+std::vector<SomeipField> parse_fields(const Json &items, std::size_t bytes) {
+    std::vector<SomeipField> fields;
+
+    for (const auto &f : items) {
+        SomeipField field{f.at("name").get<std::string>(), f.at("offset").get<std::size_t>(),
+                          f.at("bytes").get<unsigned>()};
+
+        if (field.bytes < 1 || field.bytes > 8 || field.offset + field.bytes > bytes) {
+            throw VoyemuError("SOMEIP_CONTRACT", "invalid field extent");
+        }
+
+        fields.push_back(std::move(field));
+    }
+
+    return fields;
+}
+
+Json fields_json(const std::vector<SomeipField> &fields) {
+    Json out = Json::array();
+
+    for (const auto &field : fields) {
+        out.push_back({{"name", field.name}, {"offset", field.offset}, {"bytes", field.bytes}});
+    }
+
+    return out;
+}
+
+// Raw catalogue values into their fields; returns the number of changed fields.
+unsigned write_fields(const Json &raw, const std::vector<SomeipField> &fields,
+                      std::vector<std::uint8_t> &payload) {
+    unsigned changed = 0;
+
+    for (const auto &field : fields) {
+        const auto value = raw.find(field.name);
+
+        if (value == raw.end() ||
+            !(value->is_number_unsigned() ||
+              (value->is_number_integer() && value->get<std::int64_t>() >= 0)) ||
+            field.name.find(".E2E_Header.") != std::string::npos) {
+            continue;
+        }
+
+        const std::uint64_t limit = field.bytes == 8 ? ~0ULL : (1ULL << (8 * field.bytes)) - 1;
+        const auto bounded = std::min(value->get<std::uint64_t>(), limit);
+        std::array<std::uint8_t, 8> before{};
+        std::copy_n(payload.begin() + field.offset, field.bytes, before.begin());
+        put_at(payload, field.offset, bounded, field.bytes);
+
+        if (!std::equal(before.begin(), before.begin() + field.bytes,
+                        payload.begin() + field.offset)) {
+            ++changed;
+        }
+    }
+
+    return changed;
 }
 
 std::uint16_t checksum(std::span<const std::uint8_t> header) {
@@ -108,19 +166,22 @@ SomeipContract someip_contract(const Json &prepared) {
                 throw VoyemuError("SOMEIP_CONTRACT", "invalid event extent");
             }
 
-            for (const auto &f : e.at("fields")) {
-                SomeipField field{f.at("name").get<std::string>(),
-                                  f.at("offset").get<std::size_t>(), f.at("bytes").get<unsigned>()};
+            event.fields = parse_fields(e.at("fields"), event.bytes);
+            service.events.push_back(std::move(event));
+        }
 
-                if (field.bytes < 1 || field.bytes > 8 ||
-                    field.offset + field.bytes > event.bytes) {
-                    throw VoyemuError("SOMEIP_CONTRACT", "invalid field extent");
-                }
+        for (const auto &m : item.at("methods")) {
+            SomeipMethod method{m.at("name").get<std::string>(),
+                                m.at("method").get<std::uint16_t>(),
+                                m.at("bytes").get<std::size_t>(),
+                                {}};
 
-                event.fields.push_back(std::move(field));
+            if (method.bytes > 1400 || method.id >= 0x8000) {
+                throw VoyemuError("SOMEIP_CONTRACT", "invalid method");
             }
 
-            service.events.push_back(std::move(event));
+            method.fields = parse_fields(m.at("fields"), method.bytes);
+            service.methods.push_back(std::move(method));
         }
 
         contract.services.push_back(std::move(service));
@@ -135,20 +196,22 @@ Json someip_contract_json(const SomeipContract &contract) {
     for (const auto &service : contract.services) {
         Json events = Json::array();
 
+        Json methods = Json::array();
+
         for (const auto &event : service.events) {
-            Json fields = Json::array();
-
-            for (const auto &field : event.fields) {
-                fields.push_back(
-                        {{"name", field.name}, {"offset", field.offset}, {"bytes", field.bytes}});
-            }
-
             events.push_back({{"name", event.name},
                               {"event", event.id},
                               {"eventgroups", event.eventgroups},
                               {"bytes", event.bytes},
                               {"e2e", event.e2e},
-                              {"fields", fields}});
+                              {"fields", fields_json(event.fields)}});
+        }
+
+        for (const auto &method : service.methods) {
+            methods.push_back({{"name", method.name},
+                               {"method", method.id},
+                               {"bytes", method.bytes},
+                               {"fields", fields_json(method.fields)}});
         }
 
         services.push_back({{"name", service.name},
@@ -156,7 +219,8 @@ Json someip_contract_json(const SomeipContract &contract) {
                             {"service", service.id},
                             {"instance", service.instance},
                             {"major", service.major},
-                            {"events", events}});
+                            {"events", events},
+                            {"methods", methods}});
     }
 
     return {{"schema", 1}, {"services", services}};
@@ -166,6 +230,10 @@ SomeipGateway::SomeipGateway(SomeipContract contract) : contract_(std::move(cont
     for (std::size_t s = 0; s < contract_.services.size(); ++s) {
         for (std::size_t e = 0; e < contract_.services[s].events.size(); ++e) {
             payloads_[{s, e}].assign(contract_.services[s].events[e].bytes, 0);
+        }
+
+        for (std::size_t m = 0; m < contract_.services[s].methods.size(); ++m) {
+            returns_[{s, m}].assign(contract_.services[s].methods[m].bytes, 0);
         }
     }
 }
@@ -183,35 +251,17 @@ unsigned SomeipGateway::apply(const Json &state) {
     const auto &raw = state.at("raw_oem");
     unsigned changed = 0;
 
+    for (auto &[key, payload] : returns_) {
+        write_fields(raw, contract_.services[key.first].methods[key.second].fields, payload);
+    }
+
     for (auto &[key, payload] : payloads_) {
         const auto &event = contract_.services[key.first].events[key.second];
-        bool event_changed = false;
-
-        for (const auto &field : event.fields) {
-            const auto value = raw.find(field.name);
-
-            if (value == raw.end() ||
-                !(value->is_number_unsigned() ||
-                  (value->is_number_integer() && value->get<std::int64_t>() >= 0)) ||
-                field.name.find(".E2E_Header.") != std::string::npos) {
-                continue;
-            }
-
-            const std::uint64_t limit = field.bytes == 8 ? ~0ULL : (1ULL << (8 * field.bytes)) - 1;
-            const auto bounded = std::min(value->get<std::uint64_t>(), limit);
-            std::array<std::uint8_t, 8> before{};
-            std::copy_n(payload.begin() + field.offset, field.bytes, before.begin());
-            put_at(payload, field.offset, bounded, field.bytes);
-
-            if (!std::equal(before.begin(), before.begin() + field.bytes,
-                            payload.begin() + field.offset)) {
-                ++changed;
-                event_changed = true;
-            }
-        }
+        const auto event_changes = write_fields(raw, event.fields, payload);
+        changed += event_changes;
 
         // A changed event is sent at once to every subscriber of one of its groups.
-        for (const auto &subscriber : event_changed ? subscribers_ : std::vector<Subscriber>{}) {
+        for (const auto &subscriber : event_changes ? subscribers_ : std::vector<Subscriber>{}) {
             if (subscriber.service == key.first &&
                 std::find(event.eventgroups.begin(), event.eventgroups.end(),
                           subscriber.eventgroup) != event.eventgroups.end()) {
@@ -277,6 +327,45 @@ void SomeipGateway::receive(std::span<const std::uint8_t> frame, Clock::time_poi
 
     if (port == sd_port && (to == own || to == sd_group)) {
         sd(vlan, from, source_port, udp.subspan(8), now);
+    } else if (port == event_port && to == own) {
+        request(vlan, from, source_port, udp.subspan(8));
+    }
+}
+
+void SomeipGateway::request(unsigned vlan, const Address &source, std::uint16_t port,
+                            std::span<const std::uint8_t> message) {
+    // A REQUEST to an offered service; an unknown method gets E_UNKNOWN_METHOD.
+    if (message.size() < 16 || message[12] != 1 || message[14] != 0x00 ||
+        get(message, 4, 4) + 8 > message.size()) {
+        return;
+    }
+
+    const auto id = get(message, 0, 2), method = get(message, 2, 2);
+    const auto client = static_cast<std::uint16_t>(get(message, 8, 2)),
+               session = static_cast<std::uint16_t>(get(message, 10, 2));
+
+    for (std::size_t s = 0; s < contract_.services.size(); ++s) {
+        const auto &service = contract_.services[s];
+
+        if (service.vlan != vlan || service.id != id) {
+            continue;
+        }
+
+        for (std::size_t m = 0; m < service.methods.size(); ++m) {
+            if (service.methods[m].id == method) {
+                send_udp(vlan, source, event_port, port,
+                         someip(service.id, service.methods[m].id, client, session, service.major,
+                                0x80, 0x00, returns_.at({s, m})));
+
+                return;
+            }
+        }
+
+        send_udp(vlan, source, event_port, port,
+                 someip(service.id, static_cast<std::uint16_t>(method), client, session,
+                        service.major, 0x81, 0x03, {}));
+
+        return;
     }
 }
 
@@ -399,7 +488,7 @@ void SomeipGateway::send_sd(unsigned vlan, const Address &destination, std::uint
     put(body, options.size(), 4);
     body.insert(body.end(), options.begin(), options.end());
     send_udp(vlan, destination, sd_port, port,
-             someip(0xffff, 0x8100, next_session(sd_session_), 1, body));
+             someip(0xffff, 0x8100, 0, next_session(sd_session_), 1, 0x02, 0x00, body));
 }
 
 void SomeipGateway::notify(const Subscriber &subscriber) {
@@ -421,9 +510,9 @@ void SomeipGateway::notify(const Subscriber &subscriber) {
                                              counter);
         }
 
-        send_udp(
-                subscriber.vlan, subscriber.endpoint.ip, event_port, subscriber.endpoint.port,
-                someip(service.id, event.id, next_session(event_session_), service.major, payload));
+        send_udp(subscriber.vlan, subscriber.endpoint.ip, event_port, subscriber.endpoint.port,
+                 someip(service.id, event.id, 0, next_session(event_session_), service.major, 0x02,
+                        0x00, payload));
     }
 }
 

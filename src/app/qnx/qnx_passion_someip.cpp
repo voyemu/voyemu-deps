@@ -6,6 +6,7 @@
 #include <map>
 #include <set>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 namespace voyemu {
 namespace {
@@ -154,6 +155,42 @@ bool descriptor_leaves(const Elf &elf, std::uint64_t at, std::vector<Leaf> &out,
     return false;
 }
 
+// The service and method id of a generated getter: the `bl <Service>_request_send` in its body
+// and the `mov w0, #id` right before it.
+std::pair<std::string, std::uint16_t>
+request_method(const Elf &elf, const Symbol &function,
+               const std::map<std::uint64_t, std::string> &senders) {
+    auto word = [&](std::uint64_t vaddr) {
+        return static_cast<std::uint32_t>(elf.read(vaddr, 4));
+    };
+
+    for (std::uint64_t pc = function.value; pc + 4 <= function.value + function.size; pc += 4) {
+        const auto bl = word(pc);
+
+        if ((bl & 0xfc000000U) != 0x94000000U) {
+            continue;
+        }
+
+        const auto sender = senders.find(pc + sign(bl & 0x3ffffff, 26) * 4);
+
+        if (sender == senders.end()) {
+            continue;
+        }
+
+        for (std::uint64_t back = pc - 4; back + 20 >= pc && back >= function.value; back -= 4) {
+            const auto mov = word(back);
+
+            if ((mov & 0xffe0001fU) == 0x52800000U) {
+                return {sender->second, static_cast<std::uint16_t>((mov >> 5) & 0xffff)};
+            }
+        }
+    }
+
+    need(false, "QNX_PASSION_SOMEIP_METHOD");
+
+    return {};
+}
+
 // The string the x0 argument of each `bl target` carries, from adrp x0 + add x0, x0, #imm right
 // before it.
 std::map<std::uint64_t, std::set<std::string>>
@@ -230,8 +267,10 @@ Json qnx_passion_someip_contract(std::string_view ic_service, const Json &servic
              "QNX_PASSION_SOMEIP_VLAN");
         const auto vlan = std::stoul(at->second.begin()->substr(4));
         need(vlan >= 1 && vlan <= 4094, "QNX_PASSION_SOMEIP_VLAN");
-        services[service] = {{"name", service}, {"vlan", vlan}, {"service", clients.at(service)},
-                             {"instance", 1},   {"major", 1},   {"events", Json::array()}};
+        services[service] = {
+                {"name", service},         {"vlan", vlan}, {"service", clients.at(service)},
+                {"instance", 1},           {"major", 1},   {"events", Json::array()},
+                {"methods", Json::array()}};
     }
 
     // Service table: service name -> event name -> signals.
@@ -322,6 +361,75 @@ Json qnx_passion_someip_contract(std::string_view ic_service, const Json &servic
                                          {"e2e", e2e},
                                          {"fields", fields}});
         }
+    }
+
+    // Field getters: each field_getter_Get_<field>_rpc_call passes its method id to
+    // <Service>_request_send; the response is its returnType descriptor's leaves, the event of the
+    // same field without the E2E header.
+    std::map<std::uint64_t, std::string> senders;
+
+    for (const auto &[name, symbol] : elf.symbols) {
+        constexpr std::string_view suffix = "_request_send";
+
+        if (name.ends_with(suffix) && symbol.size) {
+            senders[symbol.value] = name.substr(0, name.size() - suffix.size());
+        }
+    }
+
+    for (const auto &[name, symbol] : elf.symbols) {
+        constexpr std::string_view prefix = "field_getter_", suffix = "_rpc_call";
+
+        if (!name.starts_with(prefix) || !name.ends_with(suffix) || !symbol.size) {
+            continue;
+        }
+
+        const auto method_name = name.substr(prefix.size(),
+                                             name.size() - prefix.size() - suffix.size());
+        const auto [service_name, method_id] = request_method(elf, symbol, senders);
+        const auto descriptor =
+                elf.symbols.find("field_getter_" + method_name + "_returnType_fields");
+        std::vector<Leaf> leaves;
+
+        if (!services.contains(service_name) || descriptor == elf.symbols.end() ||
+            !descriptor_leaves(elf, descriptor->second.value, leaves, 0, nullptr) ||
+            leaves.empty()) {
+            continue;
+        }
+
+        auto &service = services.at(service_name);
+        const auto field = method_name.substr(method_name.find('_') + 1);
+        const Json *same = nullptr;
+
+        for (const auto &event : service.at("events")) {
+            const auto event_name = event.at("name").get<std::string>();
+
+            if (event_name.substr(event_name.find('_') + 1) == field) {
+                same = &event;
+            }
+        }
+
+        Json fields = Json::array();
+        std::size_t offset = 0;
+        const std::size_t skip = same && same->at("e2e").get<bool>() ? 4 : 0;
+        bool agree = same && same->at("fields").size() == skip + leaves.size();
+
+        for (std::size_t i = 0; agree && i < leaves.size(); ++i) {
+            agree = same->at("fields").at(skip + i).at("bytes").get<unsigned>() == leaves[i].bytes;
+        }
+
+        for (std::size_t i = 0; i < leaves.size(); ++i) {
+            fields.push_back({{"name", agree ? same->at("fields").at(skip + i).at("name")
+                                             : Json(service_name + "." + method_name + ".#" +
+                                                    std::to_string(i))},
+                              {"offset", offset},
+                              {"bytes", leaves[i].bytes}});
+            offset += leaves[i].bytes;
+        }
+
+        service["methods"].push_back({{"name", method_name},
+                                      {"method", method_id},
+                                      {"bytes", offset},
+                                      {"fields", fields}});
     }
 
     Json list = Json::array();

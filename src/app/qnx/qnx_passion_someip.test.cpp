@@ -15,9 +15,11 @@ void put(std::string &out, std::size_t at, std::uint64_t value, unsigned bytes) 
 
 // A synthetic aarch64 ELF with one generated client: start_VehicleDrivingInfo_client called with
 // the VLAN name, its client data, two event records and their decoder descriptors. The first event
-// is an E2E header structure followed by three basic values; the second one is `other`.
+// is an E2E header structure followed by three basic values; the second one is `other`. Two getters
+// pass method ids 1 and 7 to VehicleDrivingInfo_request_send: Get_f_VehicleDrivingInform returns
+// the three values, Get_f_Lonely one byte.
 std::string elf(std::string_view vlan, unsigned other_kind = 0) {
-    std::string out(0x1000, '\0');
+    std::string out(0x2000, '\0');
     out.replace(0, 4,
                 "\x7f"
                 "ELF");
@@ -44,6 +46,14 @@ std::string elf(std::string_view vlan, unsigned other_kind = 0) {
     put(out, 0x114, 0x91000000 | (0x280 << 10), 4);
     put(out, 0x118, 0x94000000 | ((-6) & 0x3ffffff), 4);
     put(out, 0x11c, 0xd65f03c0, 4);
+    put(out, 0x120, 0xd65f03c0, 4);
+    put(out, 0x124, 0xd2800001, 4);
+    put(out, 0x128, 0x52800020, 4);
+    put(out, 0x12c, 0x94000000 | ((-3) & 0x3ffffff), 4);
+    put(out, 0x130, 0xd65f03c0, 4);
+    put(out, 0x134, 0x528000e0, 4);
+    put(out, 0x138, 0x94000000 | ((-6) & 0x3ffffff), 4);
+    put(out, 0x13c, 0xd65f03c0, 4);
     put(out, 0x200, 0x2000, 2);
     for (const std::size_t record : {0x240, 0x2c0}) {
         put(out, record, 1, 4);
@@ -70,10 +80,12 @@ std::string elf(std::string_view vlan, unsigned other_kind = 0) {
     record(0x9c0, 0, 4);
     record(0x9f0, 0, 4);
     record(0xc00, other_kind, 2);
+    record(0xd00, 3, 9);
+    record(0xd60, 0, 1);
     const std::size_t relocations[][2] = {
-            {0x808, 0xb00}, {0x820, 0x860}, {0x868, 0xb10}, {0x880, 0x960}};
+            {0x808, 0xb00}, {0x820, 0x860}, {0x868, 0xb10}, {0x880, 0x960}, {0xd20, 0x890}};
 
-    for (std::size_t i = 0; i < 4; ++i) {
+    for (std::size_t i = 0; i < 5; ++i) {
         put(out, 0xa80 + 24 * i, relocations[i][0], 8);
         put(out, 0xa80 + 24 * i + 8, 1027, 8);
         put(out, 0xa80 + 24 * i + 16, relocations[i][1], 8);
@@ -81,23 +93,31 @@ std::string elf(std::string_view vlan, unsigned other_kind = 0) {
 
     out.replace(0xb00, 8, "Wrapper\0"s);
     out.replace(0xb10, 36, "Basic_strt_E2E_Profile7_MessageType\0"s);
-    const auto strings = "\0start_VehicleDrivingInfo_client\0VehicleDrivingInfo_client_data\0"
-                         "event_field_notifier_Notify_f_VehicleDrivingInform\0"
-                         "event_field_notifier_Notify_f_Other\0"
-                         "field_notifier_Notify_f_VehicleDrivingInform_event_fields\0"
-                         "field_notifier_Notify_f_Other_event_fields\0"s;
-    out.replace(0x300, strings.size(), strings);
     const struct {
-        std::size_t name, value, size;
-    } symbols[] = {{1, 0x100, 4},    {33, 0x200, 0x20}, {64, 0x240, 64},
-                   {115, 0x2c0, 64}, {151, 0x800, 96},  {209, 0xc00, 96}};
+        std::string_view name;
+        std::size_t value, size;
+    } symbols[] = {{"start_VehicleDrivingInfo_client", 0x100, 4},
+                   {"VehicleDrivingInfo_client_data", 0x200, 0x20},
+                   {"event_field_notifier_Notify_f_VehicleDrivingInform", 0x240, 64},
+                   {"event_field_notifier_Notify_f_Other", 0x2c0, 64},
+                   {"field_notifier_Notify_f_VehicleDrivingInform_event_fields", 0x800, 96},
+                   {"field_notifier_Notify_f_Other_event_fields", 0xc00, 96},
+                   {"VehicleDrivingInfo_request_send", 0x120, 4},
+                   {"field_getter_Get_f_VehicleDrivingInform_rpc_call", 0x124, 16},
+                   {"field_getter_Get_f_VehicleDrivingInform_returnType_fields", 0xd00, 96},
+                   {"field_getter_Get_f_Lonely_rpc_call", 0x134, 12},
+                   {"field_getter_Get_f_Lonely_returnType_fields", 0xd60, 96}};
+    std::string strings(1, '\0');
 
-    for (std::size_t i = 0; i < 6; ++i) {
+    for (std::size_t i = 0; i < std::size(symbols); ++i) {
         const auto at = 0x400 + 24 * (i + 1);
-        put(out, at, symbols[i].name, 4);
+        put(out, at, strings.size(), 4);
         put(out, at + 8, symbols[i].value, 8);
         put(out, at + 16, symbols[i].size, 8);
+        strings.append(symbols[i].name).push_back('\0');
     }
+
+    out.replace(0x1000, strings.size(), strings);
 
     const auto names = "\0.text\0.symtab\0.strtab\0.shstrtab\0.rela.dyn\0"s;
     out.replace(0x5a0, names.size(), names);
@@ -111,11 +131,11 @@ std::string elf(std::string_view vlan, unsigned other_kind = 0) {
         put(out, at + 32, size, 8);
         put(out, at + 40, link, 4);
     };
-    section(1, 1, 1, 0x100, 0x20, 0);
-    section(2, 7, 2, 0x400, 24 * 7, 3);
-    section(3, 15, 3, 0x300, strings.size(), 0);
+    section(1, 1, 1, 0x100, 0x40, 0);
+    section(2, 7, 2, 0x400, 24 * (std::size(symbols) + 1), 3);
+    section(3, 15, 3, 0x1000, strings.size(), 0);
     section(4, 23, 3, 0x5a0, names.size(), 0);
-    section(5, 33, 4, 0xa80, 24 * 4, 2);
+    section(5, 33, 4, 0xa80, 24 * 5, 2);
 
     return out;
 }
@@ -186,6 +206,19 @@ int main() try {
            renamed.fields[5].name == "VehicleDrivingInfo.Notify_f_VehicleDrivingInform.#5" &&
            renamed.fields[6].name == "VehicleDrivingInfo.Notify_f_VehicleDrivingInform.#6" &&
            renamed.bytes == 29);
+    // Getters answer with the event's values without its E2E header, named like the event; a
+    // getter without an event names its values by position.
+    assert(service.methods.size() == 2);
+    const auto &get = service.methods[0].name == "Get_f_VehicleDrivingInform" ? service.methods[0]
+                                                                              : service.methods[1];
+    const auto &lonely = &get == &service.methods[0] ? service.methods[1] : service.methods[0];
+    assert(get.id == 1 && get.bytes == 9 && get.fields.size() == 3 &&
+           get.fields[0].name == "VehicleDrivingInfo.Notify_f_VehicleDrivingInform.V.Mileage" &&
+           get.fields[2].name ==
+                   "VehicleDrivingInfo.Notify_f_VehicleDrivingInform.V.VehicleSpeed" &&
+           get.fields[2].offset == 5 && get.fields[2].bytes == 4);
+    assert(lonely.name == "Get_f_Lonely" && lonely.id == 7 && lonely.bytes == 1 &&
+           lonely.fields.front().name == "VehicleDrivingInfo.Get_f_Lonely.#0");
     // Arrays and strings (other descriptor kinds) leave their event out.
     assert(someip_contract(qnx_passion_someip_contract(elf("VLAN12", 8), table))
                    .services.front()

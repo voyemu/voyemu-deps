@@ -42,6 +42,22 @@ Bytes ethernet(unsigned vlan, std::uint16_t type, const Bytes &payload, bool bro
     return out;
 }
 
+Bytes udp(const std::array<std::uint8_t, 4> &to, std::uint16_t source_port, std::uint16_t port,
+          const Bytes &message) {
+    Bytes ip{0x45, 0};
+    put(ip, 28 + message.size(), 2);
+    ip.insert(ip.end(), {0, 0, 0x40, 0, 1, 17, 0, 0});
+    ip.insert(ip.end(), guest_ip.begin(), guest_ip.end());
+    ip.insert(ip.end(), to.begin(), to.end());
+    put(ip, source_port, 2);
+    put(ip, port, 2);
+    put(ip, 8 + message.size(), 2);
+    put(ip, 0, 2);
+    ip.insert(ip.end(), message.begin(), message.end());
+
+    return ethernet(12, 0x0800, ip, false);
+}
+
 // The guest's someipd: an SD message from 172.16.112.30:30490.
 Bytes sd(const std::array<std::uint8_t, 4> &to, const Bytes &entries, const Bytes &options) {
     Bytes body{0xc0, 0, 0, 0};
@@ -55,18 +71,21 @@ Bytes sd(const std::array<std::uint8_t, 4> &to, const Bytes &entries, const Byte
     put(message, 0x00000001, 4);
     put(message, 0x01010200, 4);
     message.insert(message.end(), body.begin(), body.end());
-    Bytes ip{0x45, 0};
-    put(ip, 28 + message.size(), 2);
-    ip.insert(ip.end(), {0, 0, 0x40, 0, 1, 17, 0, 0});
-    ip.insert(ip.end(), guest_ip.begin(), guest_ip.end());
-    ip.insert(ip.end(), to.begin(), to.end());
-    put(ip, 30490, 2);
-    put(ip, 30490, 2);
-    put(ip, 8 + message.size(), 2);
-    put(ip, 0, 2);
-    ip.insert(ip.end(), message.begin(), message.end());
 
-    return ethernet(12, 0x0800, ip, false);
+    return udp(to, 30490, 30490, message);
+}
+
+// A SOME/IP REQUEST from the guest's client 0x1234, session 0x42, port 50101.
+Bytes request(std::uint16_t service, std::uint16_t method) {
+    Bytes message;
+    put(message, service, 2);
+    put(message, method, 2);
+    put(message, 8, 4);
+    put(message, 0x1234, 2);
+    put(message, 0x42, 2);
+    message.insert(message.end(), {1, 1, 0x00, 0x00});
+
+    return udp(gateway_ip, 50101, SomeipGateway::event_port, message);
 }
 
 Bytes entry(std::uint8_t type, std::uint16_t service, std::uint32_t ttl, std::uint16_t group,
@@ -104,10 +123,12 @@ int main() try {
         {"name":"VehicleDrivingInfo","vlan":12,"service":8192,"instance":1,"major":1,"events":[
           {"name":"Notify_f_VehicleDrivingInform","event":32769,"eventgroups":[8192],"bytes":40,"e2e":true,
            "fields":[{"name":"VehicleDrivingInfo.Notify_f_VehicleDrivingInform.VehicleInform.E2E_Header.E2E_Counter","offset":12,"bytes":4},
-             {"name":"VehicleSpeed","offset":32,"bytes":4}]}]},
+             {"name":"VehicleSpeed","offset":32,"bytes":4}]}],"methods":[
+          {"name":"Get_f_VehicleDrivingInform","method":1,"bytes":20,
+           "fields":[{"name":"VehicleSpeed","offset":12,"bytes":4}]}]},
         {"name":"VI_MN_VehicleModeManager","vlan":14,"service":16384,"instance":1,"major":1,"events":[
           {"name":"NotifyCycle_f_PowerMode_VMM","event":32771,"eventgroups":[16384],"bytes":2,"e2e":false,
-           "fields":[{"name":"PowerMode","offset":0,"bytes":1}]}]}]})"));
+           "fields":[{"name":"PowerMode","offset":0,"bytes":1}]}],"methods":[]}]})"));
     auto state = [](std::uint64_t speed) {
         return Json{{"map_sha256", passion_map_sha256},
                     {"raw_oem",
@@ -181,6 +202,24 @@ int main() try {
     frames = drain(gateway, now);
     assert(frames.size() == 1 && get(udp_payload(frames[0]), 33, 3) == 0);
 
+    // A getter request is answered from the same state to the requester's port with its client and
+    // session; an unknown method gets E_UNKNOWN_METHOD, another VLAN's service no answer.
+    gateway.receive(request(0x2000, 1), now);
+    frames = drain(gateway, now);
+    assert(frames.size() == 1 && get(frames[0], 38, 2) == SomeipGateway::event_port &&
+           get(frames[0], 40, 2) == 50101 && get(frames[0], 0, 6) == 0x020000000022);
+    auto response = udp_payload(frames[0]);
+    assert(get(response, 0, 4) == 0x20000001 && get(response, 4, 4) == 28 &&
+           get(response, 8, 4) == 0x12340042 && get(response, 12, 4) == 0x01018000 &&
+           response.size() == 36 && get(response, 28, 4) == 56000);
+    gateway.receive(request(0x2000, 9), now);
+    frames = drain(gateway, now);
+    response = udp_payload(frames.at(0));
+    assert(frames.size() == 1 && get(response, 2, 2) == 9 && get(response, 4, 4) == 8 &&
+           get(response, 12, 4) == 0x01018103);
+    gateway.receive(request(0x4000, 1), now);
+    assert(drain(gateway, now).empty());
+
     // Cyclic notifications follow the period; the subscription lapses after its TTL.
     frames = drain(gateway, now + std::chrono::milliseconds(250));
     assert(frames.size() == 1 && get(udp_payload(frames[0]), 2, 2) == 0x8001);
@@ -201,7 +240,7 @@ int main() try {
     // Frames for other VLANs, untagged frames and garbage are ignored.
     gateway.receive(Bytes(10, 0), now);
     gateway.receive(Bytes(64, 0xff), now);
-    std::cout << "SOME/IP gateway: ARP, SD offer/subscribe/ack and E2E notifications\n";
+    std::cout << "SOME/IP gateway: ARP, SD offer/subscribe/ack, E2E notifications and getters\n";
 
     return 0;
 } catch (const std::exception &error) {

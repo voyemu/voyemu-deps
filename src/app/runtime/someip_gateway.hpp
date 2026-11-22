@@ -24,12 +24,20 @@ struct SomeipEvent {
     bool e2e = false;
     std::vector<SomeipField> fields;
 };
+// A field getter; its response payload is laid out like an event's.
+struct SomeipMethod {
+    std::string name;
+    std::uint16_t id = 0;
+    std::size_t bytes = 0;
+    std::vector<SomeipField> fields;
+};
 struct SomeipService {
     std::string name;
     unsigned vlan = 0;
     std::uint16_t id = 0, instance = 1;
     std::uint8_t major = 1;
     std::vector<SomeipEvent> events;
+    std::vector<SomeipMethod> methods;
 };
 // Prepared from the cluster's pinned binaries; see qnx_passion_someip_contract.
 struct SomeipContract {
@@ -41,7 +49,8 @@ Json someip_contract_json(const SomeipContract &contract);
 // The vehicle gateway core the cluster expects on its SOME/IP VLANs: one MAC, address
 // 172.16.(100+VLAN).10 on each VLAN. It answers ARP and service discovery, acknowledges
 // eventgroup subscriptions and sends notifications, E2E profile 7 protected where the payload
-// carries the header (DataID = service << 16 | event).
+// carries the header (DataID = service << 16 | event). Field getter requests are answered from the
+// same state.
 class SomeipGateway {
 public:
     using Clock = std::chrono::steady_clock;
@@ -77,7 +86,7 @@ private:
         bool known = false;
     };
     SomeipContract contract_;
-    std::map<std::pair<std::size_t, std::size_t>, std::vector<std::uint8_t>> payloads_;
+    std::map<std::pair<std::size_t, std::size_t>, std::vector<std::uint8_t>> payloads_, returns_;
     std::map<std::pair<std::size_t, std::size_t>, std::uint32_t> counters_;
     std::vector<Subscriber> subscribers_;
     std::map<std::pair<unsigned, std::array<std::uint8_t, 4>>, Station> stations_;
@@ -88,6 +97,8 @@ private:
 
     void sd(unsigned vlan, const std::array<std::uint8_t, 4> &source, std::uint16_t port,
             std::span<const std::uint8_t> message, Clock::time_point now);
+    void request(unsigned vlan, const std::array<std::uint8_t, 4> &source, std::uint16_t port,
+                 std::span<const std::uint8_t> message);
     void send_udp(unsigned vlan, const std::array<std::uint8_t, 4> &destination,
                   std::uint16_t source_port, std::uint16_t port,
                   std::span<const std::uint8_t> payload);
